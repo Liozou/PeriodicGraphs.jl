@@ -1,0 +1,13 @@
+name = "PeriodicGraphs"
+uuid = "18c5b727-b240-4874-878a-f2e242435bab"
+authors = ["Lionel Zoubritzky lionel.zoubritzky@gmail.com"]
+version = "0.1.0"
+
+[compat]
+julia = "1"
+
+[extras]
+Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
+
+[targets]
+test = ["Test"]
