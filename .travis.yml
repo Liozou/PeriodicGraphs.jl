@@ -23,3 +23,6 @@ jobs:
   exclude:
     - arch: x86
       os: osx
+codecov: true
+after_success:
+- julia -e 'import PeriodicGraphs; cd(joinpath(dirname(pathof(PeriodicGraphs)), "..")); using Pkg; Pkg.add("Coverage"); using Coverage; Codecov.submit(Codecov.process_folder())'
