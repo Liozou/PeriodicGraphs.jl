@@ -1,5 +1,4 @@
 using Test
-using Random
 using LightGraphs
 using PeriodicGraphs
 import PeriodicGraphs: ofs, vertex_permutation, LoopException
@@ -7,6 +6,13 @@ import StaticArrays: SVector
 
 # using Aqua
 # Aqua.test_all(PeriodicGraphs)
+
+@static if VERSION < v"1.4-"
+    function only(t)
+        length(t) == 1 || throw(ArgumentError("Not exactly 1 element"))
+        return t[1]
+    end
+end
 
 @testset "PeriodicVertex" begin
     @test_throws MethodError PeriodicVertex2D() # Always require a vertex identifier
@@ -237,6 +243,7 @@ end
     @test ne(g) == length(edges(g)) == length(edgs)
     @test collect(edges(g)) == edgs
 end
+
 
 @testset "Neighbors" begin
     g = PeriodicGraph3D(1)
