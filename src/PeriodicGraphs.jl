@@ -528,10 +528,6 @@ function LightGraphs.SimpleGraphs.rem_vertices!(g::PeriodicGraph{N}, t::Abstract
     bt = falses(nv(g))
     bt[t] .= true
 
-    for i in t
-        g.ne[] -= count((i < x.v || (i == x.v && x.ofs > zero(x.ofs))) for x in g.nlist[i])
-    end
-
     vmap = Int[]
     rev_vmap = zeros(Int, nv(g))
 
@@ -574,6 +570,8 @@ function LightGraphs.SimpleGraphs.rem_vertices!(g::PeriodicGraph{N}, t::Abstract
     resize!(g.nlist, g_end)
     resize!(g.directedgestart, g_end)
 
+    counter_edges = 0
+
     for i in vertices(g)
         neighbors = g.nlist[i]
         remove_edges = falses(length(neighbors))
@@ -590,8 +588,10 @@ function LightGraphs.SimpleGraphs.rem_vertices!(g::PeriodicGraph{N}, t::Abstract
         deleteat!(neighbors, remove_edges)
         sort!(neighbors)
         g.directedgestart[i] = startoffset
+        counter_edges += startoffset - 1
     end
 
+    g.ne[] = counter_edges
     g.width[] = -1
 
     return vmap

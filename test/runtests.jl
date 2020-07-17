@@ -206,6 +206,13 @@ end
         @test g == PeriodicGraph3D(1)
         @test !has_edge(g, 1, 2)
         @test !has_edge(g, 1, 1)
+        @test add_vertex!(g)
+        @test nv(g) == 2
+        @test add_edge!(g, PeriodicEdge(1, 2, (0,1,1)))
+        @test ne(g) == 1
+        @test rem_vertices!(g, [2]) == [1]
+        @test ne(g) == 0
+        @test nv(g) == 1
     end
 end
 
