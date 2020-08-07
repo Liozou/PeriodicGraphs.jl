@@ -1,7 +1,7 @@
 name = "PeriodicGraphs"
 uuid = "18c5b727-b240-4874-878a-f2e242435bab"
 authors = ["Lionel Zoubritzky lionel.zoubritzky@gmail.com"]
-version = "0.1.0"
+version = "0.1.1"
 
 [deps]
 LightGraphs = "093fc24a-ae57-5d10-9952-331d41423f4d"
