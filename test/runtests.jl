@@ -1,7 +1,7 @@
 using Test
 using LightGraphs
 using PeriodicGraphs
-import PeriodicGraphs: ofs, vertex_permutation, LoopException
+import PeriodicGraphs: ofs, vertex_permutation, dimensionality, LoopException
 import StaticArrays: SVector
 
 # using Aqua
@@ -354,4 +354,36 @@ end
     @test rem_vertex!(gg, 2)
     @test rem_vertex!(gg, 2)
     @test g == gg
+end
+
+@testset "Dimensionality" begin
+    @test dimensionality(PeriodicGraph{0}(5)) == Dict(0 => [collect(1:5)])
+    g::PeriodicGraph3D = PeriodicGraph3D([PeriodicEdge3D(1, 3, (0, 0, 1)),
+                                          PeriodicEdge3D(2, 3, (0, 1, 0)),
+                                          PeriodicEdge3D(2, 3, (0, -1, 0)),
+                                          PeriodicEdge3D(4, 4, (1, 1, 0))])
+    function equivalent_dict(d1, d2)
+        keys(d1) == keys(d2) || return false
+        for k in keys(d1)
+            s1 = Set(Set(x) for x in d1[k])
+            s2 = Set(Set(x) for x in d2[k])
+            s1 == s2 || return false
+        end
+        return true
+    end
+    @test equivalent_dict(dimensionality(g), Dict(1 => connected_components(g)))
+    @test add_edge!(g, PeriodicEdge(3, 2, (0,0,0)))
+    @test equivalent_dict(dimensionality(g), Dict(1 => connected_components(g)))
+    @test add_edge!(g, PeriodicEdge(2, 2, (0,0,1)))
+    @test equivalent_dict(dimensionality(g), Dict(1 => [[4]], 2 => [[1,2,3]]))
+    @test rem_edge!(g, PeriodicEdge(1, 3, (0,0,1)))
+    @test equivalent_dict(dimensionality(g), Dict(0 => [[1]], 1 => [[4]], 2 => [[2,3]]))
+    @test rem_edge!(g, PeriodicEdge(3, 2, (0,0,0)))
+    @test equivalent_dict(dimensionality(g), Dict(0 => [[1]], 1 => [[4]], 2 => [[2,3]]))
+    @test rem_edge!(g, PeriodicEdge(2, 3, (0,1,0)))
+    @test equivalent_dict(dimensionality(g), Dict(0 => [[1]], 1 => [[2,3],[4]]))
+    @test add_edge!(g, PeriodicEdge(2, 3, (1,0,-1)))
+    @test equivalent_dict(dimensionality(g), Dict(0 => [[1]], 1 => [[4]], 2 => [[2,3]]))
+    @test add_edge!(g, PeriodicEdge(2, 3, (2,0,-1)))
+    @test equivalent_dict(dimensionality(g), Dict(0 => [[1]], 1 => [[4]], 3 => [[2,3]]))
 end
