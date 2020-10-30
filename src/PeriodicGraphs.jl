@@ -4,6 +4,7 @@ using LinearAlgebra
 using StaticArrays
 using LightGraphs
 export PeriodicVertex, PeriodicEdge, PeriodicGraph,
+       PeriodicVertex1D, PeriodicEdge1D, PeriodicGraph1D,
        PeriodicVertex2D, PeriodicEdge2D, PeriodicGraph2D,
        PeriodicVertex3D, PeriodicEdge3D, PeriodicGraph3D,
        coordination_sequence, cellgraph, periodiccellgraph,
@@ -49,6 +50,7 @@ end
 isless(x::PeriodicVertex{N}, y::PeriodicVertex{N}) where {N} = cmp(x, y) < 0
 ==(x::PeriodicVertex{N}, y::PeriodicVertex{M}) where {N,M} = N == M && iszero(cmp(x, y))
 
+const PeriodicVertex1D = PeriodicVertex{1}
 const PeriodicVertex2D = PeriodicVertex{2}
 const PeriodicVertex3D = PeriodicVertex{3}
 
@@ -69,6 +71,14 @@ function hash_position((x1,x2)::SVector{2,<:Integer})
     x1 = ZtoN(x1); x2 = ZtoN(x2)
     b = x1 >= x2
     return b*(x2 + x1^2) + (!b)*(x1 + x2*(x2 + 1) + 1)
+end
+
+function hash_position((x,)::SVector{1,<:Integer})
+    return ZtoN(x)
+end
+
+function hash_position(::SVector{0,<:Integer})
+    return 0
 end
 
 """
@@ -157,13 +167,11 @@ function show(io::IO, x::PeriodicEdge{N}) where N
     print(io, '(', x.src, ", ", x.dst.v, ", (", join(x.dst.ofs, ','), ')', ')')
 end
 
+const PeriodicEdge1D = PeriodicEdge{1}
 const PeriodicEdge2D = PeriodicEdge{2}
 const PeriodicEdge3D = PeriodicEdge{3}
 
 function LightGraphs.reverse(e::PeriodicEdge{N}) where N
-    if e.src == e.dst
-        return e
-    end
     return unsafe_edge{N}(e.dst.v, e.src, .-e.dst.ofs)
 end
 LightGraphs.src(e::PeriodicEdge) = e.src
@@ -199,6 +207,7 @@ struct PeriodicGraph{N} <: AbstractGraph{Int}
     width::Base.RefValue{Rational{Int}}
 end
 
+const PeriodicGraph1D = PeriodicGraph{1}
 const PeriodicGraph2D = PeriodicGraph{2}
 const PeriodicGraph3D = PeriodicGraph{3}
 
@@ -285,14 +294,18 @@ function iterate(k::KeyString{T}, (next_char, idx)) where T
         tmp = idx
         next_char, idx = state
     end
-    return (parse(T, SubString(k.x, start:stop)), state)
+    ret = tryparse(T, SubString(k.x, start:stop))
+    if ret isa T
+        return (ret, state)
+    end
+    throw(ArgumentError("Intput string does not represent a graph"))
 end
 function iterate(k::KeyString)
     iterate(k, (' ', k.start[]))
 end
 function Base.popfirst!(k::KeyString)
     next = iterate(k)
-    next isa Nothing && throw(ArgumentError("collection must be non-empty"))
+    next isa Nothing && throw(ArgumentError("Intput string does not represent a graph"))
     char, state = next
     k.start[] = state isa Nothing ? (ncodeunits(k.x) + 1) : last(state)
     return char
@@ -421,19 +434,19 @@ end
 """
     find_edges(g::PeriodicGraph, s::Int, d::Int)
 
-Return the set of edges of graph `g` such that the source vertex identifier is `s`
-and the destination vertex identifier is `d`.
+Return the set of PeriodicVertex `v` of graph `g` such that there is an edge
+between a source vertex of identifier `s` and `v`, and the identifier of `v` is `d`.
 """
-function find_edges(g::PeriodicGraph, s::Int, d::Int)
+function find_edges(g::PeriodicGraph{N}, s::Int, d::Int) where N
     ((s < 1) | (s > nv(g))) && return false
     #=@inbounds=# begin
         start = g.directedgestart[s]
         lo, hi = s > d ? (1, start-1) : (start, lastindex(g.nlist[s]))
-        rng = searchsorted(g.nlist[s], d, lo, hi, Lt((x,y)->isless(x.v, y)))
-        if s == d.v
+        rng = searchsorted(g.nlist[s], d, lo, hi, Lt((x,y)->isless(x isa Integer ? x : x.v, y isa Integer ? y : y.v)))
+        if s == d
             rng = (2*first(rng) - last(rng) - 1):last(rng)
         end
-        return g.nlists[rng]
+        return g.nlist[s][rng]
     end
 end
 function LightGraphs.has_edge(g::PeriodicGraph, e::PeriodicEdge)
@@ -768,7 +781,7 @@ end
 @noinline __throw_invalid_offsets() = throw(ArgumentError("The size of offsets does not match the number of vertices"))
 
 """
-    swap_axes!(g::PeriodicGraph, t::AbstractVector{<:Integer})
+    swap_axes!(g::PeriodicGraph, t)
 
 In-place modifies graph `g` so that the new initial cell corresponds to the previous
 one with its axes swapped according to the permutation `t`.
@@ -776,13 +789,14 @@ one with its axes swapped according to the permutation `t`.
 Note that the resulting graph is isomorphic to the initial one, only the representation
 has changed.
 """
-function swap_axes!(g::PeriodicGraph{N}, t::AbstractVector{<:Integer}) where N
+function swap_axes!(g::PeriodicGraph{N}, t) where N
     length(t) == N || __throw_invalid_axesswap()
+    tt::Vector{Int} = t isa Vector ? t : collect(t)
     for i in vertices(g)
         neighs = g.nlist[i]
         for j in 1:length(neighs)
             x = neighs[j]
-            neigh = PeriodicVertex{N}(x.v, x.ofs[t])
+            neigh = PeriodicVertex{N}(x.v, x.ofs[tt])
             neighs[j] = neigh
         end
         sort!(neighs)
@@ -836,7 +850,7 @@ the fields).
 """
 function graph_width!(g::PeriodicGraph{N}) where N
     distances = floyd_warshall_shortest_paths(cellgraph(g)).dists
-    extremalpoints = NTuple{N,NTuple{2,Vector{Tuple{Int,Int}}}}((([],[]),([],[]),([],[])))
+    extremalpoints = NTuple{N,NTuple{2,Vector{Tuple{Int,Int}}}}([([],[]) for _ in 1:N])
     # a, x ∈ extremalpoints[i][j] where i ∈ ⟦1,N⟧ and j ∈ ⟦1,2⟧ means that
     # vertex x has a neighbor whose offset is a*(-1)^(j-1) along dimension i
     maxa = 1
@@ -878,7 +892,7 @@ function graph_width!(g::PeriodicGraph{N}) where N
     g.width[] = width == nv(g)+1 ? Rational(maxa) : width
 end
 
-function LightGraphs._neighborhood(g::Union{PeriodicGraph{2}, PeriodicGraph{3}}, v::Integer, d::Real, distmx::AbstractMatrix{U}, neighborfn::Function) where U <: Real
+function LightGraphs._neighborhood(g::Union{PeriodicGraph{0},PeriodicGraph{1},PeriodicGraph{2},PeriodicGraph{3}}, v::Integer, d::Real, distmx::AbstractMatrix{U}, neighborfn::Function) where U <: Real
     @assert typeof(neighborfn) === typeof(outneighbors)
     N = ndims(g)
     Q = Tuple{PeriodicVertex{N}, U}[]
