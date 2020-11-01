@@ -234,6 +234,7 @@ end
     @test PeriodicGraph("3") == PeriodicGraph3D("3") == PeriodicGraph3D()
     @test ne(PeriodicGraph("3  1 1  1 0 0  1 1 -1 0 0  1 1 3 0 0")) == 2
     @test nv(PeriodicGraph("2  11 12 0 0")) == 12
+    @test collect(PeriodicGraphs.KeyString{Int}("3 2 1 0 1 -1")) == [3, 2, 1, 0, 1, -1]
     @test_throws ArgumentError PeriodicGraph2D("")
     @test_throws ArgumentError PeriodicGraph("")
     @test_throws ArgumentError PeriodicGraph3D("a")

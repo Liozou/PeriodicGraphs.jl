@@ -311,7 +311,7 @@ function Base.popfirst!(k::KeyString)
     return char
 end
 Base.isempty(k::KeyString) = isempty(SubString(k.x, k.start[]))
-Base.IteratorSize(::Type{KeyString}) = SizeUnknown()
+Base.IteratorSize(::Type{<:KeyString}) = Base.SizeUnknown()
 
 """
     PeriodicGraph(key::AbstractString)
