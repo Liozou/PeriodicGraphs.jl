@@ -102,7 +102,7 @@ end
     @test ne(gg) == nv(gg) == 0 && isempty(edges(gg))
     @test ne(g) == nv(g) == 0 && isempty(edges(g))
     @test g == gg
-    @test_throws ArgumentError swap_axes!(g, [2,1])
+    @test_throws DimensionMismatch swap_axes!(g, [2,1])
     gg = swap_axes!(g, Int[1,2,3])
     @test ne(gg) == nv(gg) == 0 && isempty(edges(gg))
     @test ne(g) == nv(g) == 0 && isempty(edges(g))
@@ -303,7 +303,7 @@ end
     gcopy = deepcopy(gg)
     offset_representatives!(gg, [(2,1,-3), (2,1,-3)])
     @test gg == gcopy
-    @test_throws ArgumentError swap_axes!(g, [1,3])
+    @test_throws DimensionMismatch swap_axes!(g, [1,3])
     ggg = swap_axes!(gg, (1,2,3))
     @test gcopy == gg == ggg
     ggg = swap_axes!(gg, (2,1,3))
@@ -495,4 +495,8 @@ end
     @test equivalent_dict(dimensionality(g), Dict(0 => [[1]], 1 => [[4]], 2 => [[2,3]]))
     @test add_edge!(g, PeriodicEdge(2, 3, (2,0,-1)))
     @test equivalent_dict(dimensionality(g), Dict(0 => [[1]], 1 => [[4]], 3 => [[2,3]]))
+end
+
+@testset "Dimension change" begin
+    @test false
 end

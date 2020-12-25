@@ -3,12 +3,15 @@ module PeriodicGraphs
 using LinearAlgebra
 using StaticArrays
 using LightGraphs
+
 export PeriodicVertex, PeriodicEdge, PeriodicGraph,
        PeriodicVertex1D, PeriodicEdge1D, PeriodicGraph1D,
        PeriodicVertex2D, PeriodicEdge2D, PeriodicGraph2D,
        PeriodicVertex3D, PeriodicEdge3D, PeriodicGraph3D,
        coordination_sequence, cellgraph, periodiccellgraph,
-       offset_representatives!, swap_axes!, find_edges
+       offset_representatives!, swap_axes!, find_edges,
+       dimensionality, change_dimension
+
 import Base: (==), isless, convert, show, showerror, eltype, iterate, zero,
              length, in, ndims, print, cmp
 import Base.Order: Forward, Lt
@@ -804,7 +807,7 @@ function swap_axes!(g::PeriodicGraph{N}, t) where N
     end
     g
 end
-@noinline __throw_invalid_axesswap() = throw(ArgumentError("The number of axes must match the dimension of the graph"))
+@noinline __throw_invalid_axesswap() = throw(DimensionMismatch("The number of axes must match the dimension of the graph"))
 
 
 function LightGraphs.connected_components(g::PeriodicGraph)
@@ -998,49 +1001,7 @@ function periodiccellgraph(g::PeriodicGraph)
     return ret
 end
 
-"""
-    dimensionality(g::PeriodicGraph)
-
-Determines the actual dimension of each connected component of `g`.
-Return a dictionary where each entry n => [l1, l2, ...] means that li is a
-list of vertices that form a connected component of dimension n.
-"""
-dimensionality(g::PeriodicGraph{0}) = Dict{Int,Vector{Vector{Int}}}(0 => [collect(vertices(g))])
-function dimensionality(g::PeriodicGraph{N}) where N
-    ret = Dict{Int,Vector{Vector{Int}}}()
-    n = nv(g)
-    visited = falses(n)
-    nullofs = zero(SVector{N,Int})
-    for i in vertices(g)
-        visited[i] && continue
-        recordedperiodicities = Set{SVector{N,Int}}()
-        component = Dict{Int,SVector{N,Int}}(i => nullofs)
-        seen = Set{PeriodicVertex{N}}([PeriodicVertex{N}(i)])
-        Q = PeriodicVertex[(PeriodicVertex{N}(i))]
-        for src in Q
-            @assert !visited[src.v]
-            for dst in outneighbors(g, src.v)
-                dst = PeriodicVertex{N}(dst.v, dst.ofs .+ src.ofs)
-                dst ∈ seen && continue
-                push!(seen, dst)
-                lastperiodicity = get!(component, dst.v, dst.ofs)
-                thisperiodicity = dst.ofs .- lastperiodicity
-                if iszero(thisperiodicity) # First time we encounter dst.v
-                    push!(Q, dst)
-                else
-                    push!(recordedperiodicities, thisperiodicity)
-                end
-            end
-        end
-        newcomponent = collect(keys(component))
-        visited[newcomponent] .= true
-        dim = rank(reduce(hcat, recordedperiodicities; init=reshape(nullofs, 3, 1)))
-        x = get!(ret, dim, [])
-        push!(x, newcomponent)
-    end
-    return ret
-end
-
+include("dimensionality.jl")
 include("precompile.jl")
 
 end

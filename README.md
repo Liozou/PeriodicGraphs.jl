@@ -77,4 +77,4 @@ julia> neighbors(g, 2)
  (3, (0,1,1))
 ```
 
-For convenience, aliases are exported for 2D and 3D (`N = 2` and `N = 3`) under the names `PeriodicGraph2D`, `PeriodicGraph3D`, `PeriodicEdge2D`, `PeriodicEdge3D`, `PeriodicVertex2D` and `PeriodicVertex3D`.
+For convenience, aliases are exported for 1D, 2D and 3D (`N = 1`, `N = 2` and `N = 3`) under the names `PeriodicGraph1D`, `PeriodicEdge2D`, `PeriodicVertex3D`, etc.
