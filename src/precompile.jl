@@ -44,6 +44,10 @@ function _precompile_()
         @assert Base.precompile(Tuple{typeof(swap_axes!),PeriodicGraph{i},Vector{Int}})
         @assert Base.precompile(Tuple{typeof(swap_axes!),PeriodicGraph{i},NTuple{i,Int}})
         @assert Base.precompile(Tuple{typeof(vertex_permutation),PeriodicGraph{i},Vector{Any}})
+
+        for j in 1:3
+            @assert Base.precompile(Tuple{typeof(PeriodicGraphs.change_dimension),Type{PeriodicGraph{i}},PeriodicGraph{j}})
+        end
     end
 end
 
