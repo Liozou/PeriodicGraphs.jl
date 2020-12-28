@@ -1,7 +1,7 @@
 using Test
 using LightGraphs
 using PeriodicGraphs
-import PeriodicGraphs: ofs, vertex_permutation, dimensionality, LoopException
+import PeriodicGraphs: ofs, vertex_permutation, dimensionality, LoopException, extended_gcd
 import StaticArrays: SVector
 
 # using Aqua
@@ -113,6 +113,8 @@ end
     @test edges(g) isa PeriodicGraphs.PeriodicEdgeIter{3}
     @test_throws BoundsError coordination_sequence(g, 1, 0)
     @test_throws BoundsError coordination_sequence(g, 1, 0) # once width is set
+    @test !has_vertex(g, 0)
+    @test !has_vertex(g, 1)
 end
 
 @testset "Basic graph construction and modification" begin
@@ -157,6 +159,11 @@ end
         @test ne(g) == 0 && nv(g) == 2 && g == PeriodicGraph3D(2)
         @test vertices(g) == [1,2]
         @test rem_vertices!(g, [1,2]) == Int[]
+        @test add_vertices!(g, 5) == 5
+        @test rem_vertices!(g, [2,4], true) == [1,3,5]
+        @test g == PeriodicGraph3D(3)
+        @test rem_vertices!(g, [1,2,3], true) == Int[]
+        @test g == PeriodicGraph3D()
     end
 
     @testset "Single edge" begin
@@ -269,6 +276,7 @@ end
     @test find_edges(g2, 1, 2) == PeriodicVertex2D[(2, (-1,0)), (2, (0,0))]
     @test find_edges(g2, 3, 2) == PeriodicVertex2D[(2, (-1,0))]
     @test inneighbors(g2, 2) == outneighbors(g2, 2)
+    @test has_vertex(g1, 1)
 end
 
 @testset "Complex graphs modifications" begin
@@ -446,7 +454,7 @@ end
     @test length(edges(g)) == ne(g)
 end
 
-@testset "[Legacy test] Vertex removal" begin
+@testset "Vertex removal" begin
     g::PeriodicGraph3D = PeriodicGraph3D([PeriodicEdge3D(1, 3, (0, 0, 1)),
                                           PeriodicEdge3D(2, 3, (0, 1, 0)),
                                           PeriodicEdge3D(2, 3, (0, -1, 0)),
@@ -463,6 +471,24 @@ end
     @test rem_vertex!(gg, 2)
     @test rem_vertex!(gg, 2)
     @test g == gg
+
+    g1 = PeriodicGraph("2
+            1 1  1 0
+            1 2  0 0
+            1 2  0 1
+            1 3  0 0
+            2 3  1 0
+            2 4  0 1
+            3 4  0 0
+            2 5  0 0
+            4 5  1 1")
+    g2 = deepcopy(g1)
+    @test rem_vertices!(g1, [2,4], false) == [1, 5, 3]
+    @test g1 == PeriodicGraph("2 1 1 1 0 1 3 0 0")
+    @test rem_vertices!(g2, [2,4], true) == [1, 3, 5]
+    gref = PeriodicGraph("2 1 1 1 0 1 2 0 0")
+    @test add_vertex!(gref)
+    @test g2 == gref
 end
 
 function equivalent_dict(d1, d2)
@@ -511,4 +537,9 @@ end
     @test change_dimension(PeriodicGraph2D, gg) == change_dimension(PeriodicGraph2D, g) ==
         PeriodicGraph("2 1 2 0 0 1 4 -1 0 2 3 0 0 3 4 0 0 4 4 1 0")
     @test_throws DimensionMismatch change_dimension(PeriodicGraph{0}, g)
+
+    s = [14,28,-17,-34,12]
+    d, λ = extended_gcd(s)
+    @test d == 1
+    @test reduce(+, s .* λ) == d
 end

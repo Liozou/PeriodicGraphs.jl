@@ -219,9 +219,9 @@ function PeriodicGraph{N}(nv::Integer, t, s) where N
 end
 
 """
-    PeriodicGraph{N}(n::Integer=0)
+    PeriodicGraph{N}(nv::Integer=0)
 
-Construct a `PeriodicGraph{N}` with `n` vertices and 0 edges.
+Construct a `PeriodicGraph{N}` with `nv` vertices and 0 edge.
 """
 function PeriodicGraph{N}(n::Integer = 0) where N
     @assert n >= 0
@@ -552,6 +552,7 @@ function LightGraphs.SimpleGraphs.rem_vertices!(g::PeriodicGraph{N}, t::Abstract
         deleteat!(vmap, bt)
         rev_vmap[vmap] .= 1:length(vmap)
         deleteat!(g.nlist, bt)
+        deleteat!(g.directedgestart, bt)
     else
         i_next_vertex_to_del = 1
         next_vertex_to_del = t[i_next_vertex_to_del]
@@ -582,9 +583,9 @@ function LightGraphs.SimpleGraphs.rem_vertices!(g::PeriodicGraph{N}, t::Abstract
             end
             i += 1
         end
+        resize!(g.nlist, g_end)
+        resize!(g.directedgestart, g_end)
     end
-    resize!(g.nlist, g_end)
-    resize!(g.directedgestart, g_end)
 
     counter_edges = 0
 
