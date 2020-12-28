@@ -465,21 +465,22 @@ end
     @test g == gg
 end
 
+function equivalent_dict(d1, d2)
+    keys(d1) == keys(d2) || return false
+    for k in keys(d1)
+        s1 = Set(Set(x) for x in d1[k])
+        s2 = Set(Set(x) for x in d2[k])
+        s1 == s2 || return false
+    end
+    return true
+end
+
 @testset "Dimensionality" begin
     @test dimensionality(PeriodicGraph{0}(5)) == Dict(0 => [collect(1:5)])
     g::PeriodicGraph3D = PeriodicGraph3D([PeriodicEdge3D(1, 3, (0, 0, 1)),
                                           PeriodicEdge3D(2, 3, (0, 1, 0)),
                                           PeriodicEdge3D(2, 3, (0, -1, 0)),
                                           PeriodicEdge3D(4, 4, (1, 1, 0))])
-    function equivalent_dict(d1, d2)
-        keys(d1) == keys(d2) || return false
-        for k in keys(d1)
-            s1 = Set(Set(x) for x in d1[k])
-            s2 = Set(Set(x) for x in d2[k])
-            s1 == s2 || return false
-        end
-        return true
-    end
     @test equivalent_dict(dimensionality(g), Dict(1 => connected_components(g)))
     @test add_edge!(g, PeriodicEdge(3, 2, (0,0,0)))
     @test equivalent_dict(dimensionality(g), Dict(1 => connected_components(g)))
@@ -498,5 +499,16 @@ end
 end
 
 @testset "Dimension change" begin
-    @test false
+    g = PeriodicGraph("3
+            1 2 0 0 0
+            2 3 1 0 0
+            3 4 -1 0 0
+            4 1 0 0 1
+            4 4 0 0 1")
+    @test equivalent_dict(dimensionality(g), Dict(1 => [[1,2,3,4]]))
+    gg = change_dimension(PeriodicGraph1D, g)
+    @test string(gg) == "1 1 2 0 1 4 -1 2 3 0 3 4 0 4 4 1"
+    @test change_dimension(PeriodicGraph2D, gg) == change_dimension(PeriodicGraph2D, g) ==
+        PeriodicGraph("2 1 2 0 0 1 4 -1 0 2 3 0 0 3 4 0 0 4 4 1 0")
+    @test_throws DimensionMismatch change_dimension(PeriodicGraph{0}, g)
 end

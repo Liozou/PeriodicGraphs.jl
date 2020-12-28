@@ -301,14 +301,14 @@ function iterate(k::KeyString{T}, (next_char, idx)) where T
     if ret isa T
         return (ret, state)
     end
-    throw(ArgumentError("Intput string does not represent a graph"))
+    throw(ArgumentError("Input string does not represent a graph"))
 end
 function iterate(k::KeyString)
     iterate(k, (' ', k.start[]))
 end
 function Base.popfirst!(k::KeyString)
     next = iterate(k)
-    next isa Nothing && throw(ArgumentError("Intput string does not represent a graph"))
+    next isa Nothing && throw(ArgumentError("Input string does not represent a graph"))
     char, state = next
     k.start[] = state isa Nothing ? (ncodeunits(k.x) + 1) : last(state)
     return char
