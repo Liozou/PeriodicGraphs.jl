@@ -33,9 +33,11 @@ end
     @static if VERSION < v"1.6.0-DEV"
         @test string(PeriodicVertex3D(12, (1,0,-1))) == "PeriodicVertex{3}(12, (1,0,-1))"
         @test string(PeriodicVertex2D[(1, (0,0)), (1, (-1,0))]) == "PeriodicVertex{2}[(1, (0,0)), (1, (-1,0))]"
+        @test string(PeriodicVertex1D(2, (1,))) == "PeriodicVertex{1}(2, (1,))"
     else
         @test string(PeriodicVertex3D(12, (1,0,-1))) == "PeriodicVertex3D(12, (1,0,-1))"
         @test string(PeriodicVertex2D[(1, (0,0)), (1, (-1,0))]) == "PeriodicVertex2D[(1, (0,0)), (1, (-1,0))]"
+        @test string(PeriodicVertex1D(2, (1,))) == "PeriodicVertex1D(2, (1,))"
     end
     @test ofs(PeriodicVertex(1, (2,1))) == SVector{2,Int}(2,1)
 end
@@ -65,9 +67,11 @@ end
     @static if VERSION < v"1.6.0-DEV"
         @test string(PeriodicEdge3D[(1, 2, (1,0,0))]) == "PeriodicEdge{3}[(1, 2, (1,0,0))]"
         @test string(PeriodicEdge(3,4, (0,0))) == "PeriodicEdge{2}(3, 4, (0,0))"
+        @test string(PeriodicEdge{1}(1, 1, (2,))) == "PeriodicEdge{1}(1, 1, (2,))"
     else
         @test string(PeriodicEdge3D[(1, 2, (1,0,0))]) == "PeriodicEdge3D[(1, 2, (1,0,0))]"
         @test string(PeriodicEdge(3,4, (0,0))) == "PeriodicEdge2D(3, 4, (0,0))"
+        @test string(PeriodicEdge{1}(1, 1, (2,))) == "PeriodicEdge1D(1, 1, (2,))"
     end
     @test reverse(reverse(PeriodicEdge(1, 1, (2,3,1)))) == PeriodicEdge3D(1, 1, (2,3,1))
     @test reverse(PeriodicEdge(1, 2, (1,-2))) == PeriodicEdge(2, 1, (-1,2))

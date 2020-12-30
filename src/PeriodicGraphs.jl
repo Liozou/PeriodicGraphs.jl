@@ -37,7 +37,9 @@ function show(io::IO, x::PeriodicVertex{N}) where N
     if get(io, :typeinfo, Any) != PeriodicVertex{N}
         print(io, PeriodicVertex{N})
     end
-    print(io, '(', x.v, ", (", join(x.ofs, ','), ')', ')')
+    print(io, '(', x.v, ", (", join(x.ofs, ','))
+    N == 1 && print(io, ',')
+    print(io, ')', ')')
 end
 function convert(::Type{PeriodicVertex{N}}, (dst, offset)::Tuple{Integer,Any}) where N
     PeriodicVertex{N}(dst, offset)
@@ -167,7 +169,9 @@ function show(io::IO, x::PeriodicEdge{N}) where N
     if get(io, :typeinfo, Any) != PeriodicEdge{N}
         print(io, PeriodicEdge{N})
     end
-    print(io, '(', x.src, ", ", x.dst.v, ", (", join(x.dst.ofs, ','), ')', ')')
+    print(io, '(', x.src, ", ", x.dst.v, ", (", join(x.dst.ofs, ','))
+    N == 1 && print(io, ',')
+    print(io, ')', ')')
 end
 
 const PeriodicEdge1D = PeriodicEdge{1}
