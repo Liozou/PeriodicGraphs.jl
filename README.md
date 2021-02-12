@@ -1,6 +1,5 @@
 # PeriodicGraphs
 
-[![Build Status](https://travis-ci.com/Liozou/PeriodicGraphs.jl.svg?branch=master)](https://travis-ci.com/Liozou/PeriodicGraphs.jl)
 [![Build Status](https://ci.appveyor.com/api/projects/status/github/Liozou/PeriodicGraphs.jl?svg=true)](https://ci.appveyor.com/project/Liozou/PeriodicGraphs-jl)
 [![codecov](https://codecov.io/gh/Liozou/PeriodicGraphs.jl/branch/master/graph/badge.svg)](https://codecov.io/gh/Liozou/PeriodicGraphs.jl)
 <!-- [![Aqua QA](https://img.shields.io/badge/Aqua.jl-%F0%9F%8C%A2-aqua.svg)](https://github.com/tkf/Aqua.jl) -->
