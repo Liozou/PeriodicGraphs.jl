@@ -4,7 +4,7 @@
 [![codecov](https://codecov.io/gh/Liozou/PeriodicGraphs.jl/branch/master/graph/badge.svg)](https://codecov.io/gh/Liozou/PeriodicGraphs.jl)
 <!-- [![Aqua QA](https://img.shields.io/badge/Aqua.jl-%F0%9F%8C%A2-aqua.svg)](https://github.com/tkf/Aqua.jl) -->
 
-This module allows to manipulate `N`-dimensional periodic graphs, using the new type `PeriodicGraph{N}`. This is a subtype of `AbstractGraph{Int}` from [LightGraphs.jl](https://github.com/JuliaGraphs/LightGraphs.jl/) and it extends its API.
+This module allows to manipulate `N`-dimensional periodic graphs, using the new type `PeriodicGraph{N}`. This is a subtype of `AbstractGraph{Int}` from [Graphs.jl](https://github.com/JuliaGraphs/Graphs.jl/) and it extends its API.
 
 The main difference with a simple graph is the notion of offset. Each vertex, of type `PeriodicVertex{N}` is uniquely defined using a numeric identifier (a positive integer, like for any simple graph) associated with the offset of the cell in which the designated vertex is, compared to a fixed reference cell. For instance, all vertices in the reference cell have a zero offset, and may be built like so:
 ```julia
@@ -22,10 +22,10 @@ An edge, of type `PeriodicEdge{N}`, is defined by its representative starting fr
 julia> PeriodicEdge{4}(2, PeriodicVertex{4}(3, (0,1,0,0)))
 PeriodicEdge{4}(2, 3, (0,1,0,0))
 
-julia> LightGraphs.src(PeriodicEdge{3}(5, 6, (1,0,2)))
+julia> Graphs.src(PeriodicEdge{3}(5, 6, (1,0,2)))
 5
 
-julia> LightGraphs.dst(PeriodicEdge{3}(5, 6, (1,0,2)))
+julia> Graphs.dst(PeriodicEdge{3}(5, 6, (1,0,2)))
 6
 
 julia> PeriodicGraphs.ofs(PeriodicEdge{3}(5, 6, (1,0,2)))
@@ -61,9 +61,9 @@ julia> string(ans) # to obtain the compact representation from the graph
 "3 1 2 1 0 0 1 3 0 1 0 2 2 0 0 1 2 3 0 1 1"
 ```
 
-Note that `PeriodicGraph`s are undirected: for this reason, any edge in the graph of the form `(u, v, (x1, x2, ..., xN))` has a reverse edge in the graph of the form `(v, u, (-x1, -x2, ..., -xN))`. For this reason, calling `LightGraphs.edges` on a `PeriodicGraph` yields an iterator to the edges of the graph that will only show the edges under the canonical form `(u, v, ofs)` with either `u < v` or `u == v && ofs > zero(ofs)`.
+Note that `PeriodicGraph`s are undirected: for this reason, any edge in the graph of the form `(u, v, (x1, x2, ..., xN))` has a reverse edge in the graph of the form `(v, u, (-x1, -x2, ..., -xN))`. For this reason, calling `Graphs.edges` on a `PeriodicGraph` yields an iterator to the edges of the graph that will only show the edges under the canonical form `(u, v, ofs)` with either `u < v` or `u == v && ofs > zero(ofs)`.
 
-Neighbors can be obtained using LightGraphs's `neighbors` function, with the same API. It will return the list of neighbors of the given vertex, assuming the vertex is in the reference cell. Each given is given as a `PeriodicVertex`, which contains the offset compared to the reference cell. For instance:
+Neighbors can be obtained using Graphs's `neighbors` function, with the same API. It will return the list of neighbors of the given vertex, assuming the vertex is in the reference cell. Each given is given as a `PeriodicVertex`, which contains the offset compared to the reference cell. For instance:
 ```julia
 julia> g = PeriodicGraph("3  1 2 1 0 0  1 3 0 1 0  2 2 0 0 1  2 3 0 1 1")
 PeriodicGraph3D(3, PeriodicEdge3D[(1, 2, (1,0,0)), (1, 3, (0,1,0)), (2, 2, (0,0,1)), (2, 3, (0,1,1))])

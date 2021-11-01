@@ -2,7 +2,7 @@ module PeriodicGraphs
 
 using LinearAlgebra
 using StaticArrays
-using LightGraphs
+using Graphs
 
 export PeriodicVertex, PeriodicEdge, PeriodicGraph,
        PeriodicVertex1D, PeriodicEdge1D, PeriodicGraph1D,
@@ -125,14 +125,14 @@ This function is not part of the official API, use with caution.
 struct unsafe_edge{N} end
 
 """
-    PeriodicEdge{N} <: LightGraphs.SimpleGraphs.AbstractSimpleEdge{Int}
+    PeriodicEdge{N} <: Graphs.SimpleGraphs.AbstractSimpleEdge{Int}
 
 Edge type for an `N`-periodic graph.
 
 An edge is uniquely determined by the vertex identifiers of its source and
 destination, and the cell offset between the source vertex and the destination vertex.
 """
-struct PeriodicEdge{N} <: LightGraphs.SimpleGraphs.AbstractSimpleEdge{Int}
+struct PeriodicEdge{N} <: Graphs.SimpleGraphs.AbstractSimpleEdge{Int}
     src::Int
     dst::PeriodicVertex{N}
     function (::Type{unsafe_edge{N}})(src, dst) where N
@@ -178,11 +178,11 @@ const PeriodicEdge1D = PeriodicEdge{1}
 const PeriodicEdge2D = PeriodicEdge{2}
 const PeriodicEdge3D = PeriodicEdge{3}
 
-function LightGraphs.reverse(e::PeriodicEdge{N}) where N
+function Graphs.reverse(e::PeriodicEdge{N}) where N
     return unsafe_edge{N}(e.dst.v, e.src, .-e.dst.ofs)
 end
-LightGraphs.src(e::PeriodicEdge) = e.src
-LightGraphs.dst(e::PeriodicEdge) = e.dst.v
+Graphs.src(e::PeriodicEdge) = e.src
+Graphs.dst(e::PeriodicEdge) = e.dst.v
 
 """
     ofs(v::PeriodicVertex)
@@ -422,13 +422,13 @@ julia> ndims(PeriodicGraph2D(7))
 """
 ndims
 
-LightGraphs.ne(g::PeriodicGraph) = g.ne[]
-LightGraphs.nv(g::PeriodicGraph) = length(g.nlist)
-LightGraphs.vertices(g::PeriodicGraph) = Base.OneTo(nv(g))
-LightGraphs.edges(g::PeriodicGraph{N}) where {N} = PeriodicEdgeIter{N}(g)
+Graphs.ne(g::PeriodicGraph) = g.ne[]
+Graphs.nv(g::PeriodicGraph) = length(g.nlist)
+Graphs.vertices(g::PeriodicGraph) = Base.OneTo(nv(g))
+Graphs.edges(g::PeriodicGraph{N}) where {N} = PeriodicEdgeIter{N}(g)
 eltype(g::PeriodicGraph{N}) where {N} = PeriodicVertex{N}
-LightGraphs.edgetype(::PeriodicGraph{N}) where {N} = PeriodicEdge{N}
-function LightGraphs.has_edge(g::PeriodicGraph, s, d)
+Graphs.edgetype(::PeriodicGraph{N}) where {N} = PeriodicEdge{N}
+function Graphs.has_edge(g::PeriodicGraph, s, d)
     ((s < 1) | (s > nv(g))) && return false
     #=@inbounds=# begin
         start = g.directedgestart[s]
@@ -456,7 +456,7 @@ function find_edges(g::PeriodicGraph{N}, s::Int, d::Int) where N
         return g.nlist[s][rng]
     end
 end
-function LightGraphs.has_edge(g::PeriodicGraph, e::PeriodicEdge)
+function Graphs.has_edge(g::PeriodicGraph, e::PeriodicEdge)
     s, d = e.src, e.dst
     ((s < 1) | (s > nv(g))) && return false
     #=@inbounds=# begin
@@ -466,21 +466,21 @@ function LightGraphs.has_edge(g::PeriodicGraph, e::PeriodicEdge)
         return i <= length(g.nlist[s]) && g.nlist[s][i] == d
     end
 end
-LightGraphs.outneighbors(g::PeriodicGraph, v::Integer) = g.nlist[v]
-LightGraphs.inneighbors(g::PeriodicGraph, v::Integer) = outneighbors(g, v)
+Graphs.outneighbors(g::PeriodicGraph, v::Integer) = g.nlist[v]
+Graphs.inneighbors(g::PeriodicGraph, v::Integer) = outneighbors(g, v)
 zero(::Type{PeriodicGraph{N}}) where N = PeriodicGraph{N}(0)
-LightGraphs.is_directed(::Type{<:PeriodicGraph}) = false
-@static if isdefined(LightGraphs, :has_contiguous_vertices)
-    @inline LightGraphs.has_contiguous_vertices(::Type{<:PeriodicGraph}) = true
+Graphs.is_directed(::Type{<:PeriodicGraph}) = false
+@static if isdefined(Graphs, :has_contiguous_vertices)
+    @inline Graphs.has_contiguous_vertices(::Type{<:PeriodicGraph}) = true
 end
-LightGraphs.has_vertex(g::PeriodicGraph, v::Integer) = 1 <= v <= nv(g)
-function LightGraphs.SimpleGraphs.add_vertices!(g::PeriodicGraph{N}, n::Integer) where N
+Graphs.has_vertex(g::PeriodicGraph, v::Integer) = 1 <= v <= nv(g)
+function Graphs.SimpleGraphs.add_vertices!(g::PeriodicGraph{N}, n::Integer) where N
     append!(g.nlist, [PeriodicVertex{N}[] for _ in 1:n])
     append!(g.directedgestart, [1 for _ in 1:n])
     g.width[] = -1
     return n
 end
-function LightGraphs.SimpleGraphs.add_vertex!(g::PeriodicGraph{N}) where N
+function Graphs.SimpleGraphs.add_vertex!(g::PeriodicGraph{N}) where N
     push!(g.nlist, PeriodicVertex{N}[])
     push!(g.directedgestart, 1)
     g.width[] = -1
@@ -503,7 +503,7 @@ function _add_edge!(g::PeriodicGraph, e::PeriodicEdge, ::Val{check}) where check
         return true
     end
 end
-function LightGraphs.add_edge!(g::PeriodicGraph, e::PeriodicEdge)
+function Graphs.add_edge!(g::PeriodicGraph, e::PeriodicEdge)
     (src(e) < 1 || src(e) > nv(g) || dst(e) < 1 || dst(e) > nv(g)) && return false
     success = _add_edge!(g, e, Val(true)) && _add_edge!(g, reverse(e), Val(false))
     if success
@@ -529,7 +529,7 @@ function _rem_edge!(g::PeriodicGraph, e::PeriodicEdge, ::Val{check}) where check
         return true
     end
 end
-function LightGraphs.rem_edge!(g::PeriodicGraph, e::PeriodicEdge)
+function Graphs.rem_edge!(g::PeriodicGraph, e::PeriodicEdge)
     (src(e) < 1 || src(e) > nv(g) || dst(e) < 1 || dst(e) > nv(g)) && return false
     success = _rem_edge!(g, e, Val(true)) && _rem_edge!(g, reverse(e), Val(false))
     if success
@@ -540,7 +540,7 @@ function LightGraphs.rem_edge!(g::PeriodicGraph, e::PeriodicEdge)
 end
 
 
-function LightGraphs.SimpleGraphs.rem_vertices!(g::PeriodicGraph{N}, t::AbstractVector{<:Integer}, keep_order::Bool=false) where N
+function Graphs.SimpleGraphs.rem_vertices!(g::PeriodicGraph{N}, t::AbstractVector{<:Integer}, keep_order::Bool=false) where N
     isempty(t) && return collect(1:nv(g))
     sort!(t)
     (first(t) < 1 || last(t) > nv(g)) && throw(ArgumentError("Vertices to be removed must be in the range 1:nv(g)."))
@@ -618,7 +618,7 @@ function LightGraphs.SimpleGraphs.rem_vertices!(g::PeriodicGraph{N}, t::Abstract
     return vmap
 end
 
-function LightGraphs.SimpleGraphs.rem_vertex!(g::PeriodicGraph, v::Integer)
+function Graphs.SimpleGraphs.rem_vertex!(g::PeriodicGraph, v::Integer)
     n = nv(g)
     return length(rem_vertices!(g, [v])) == n - 1
 end
@@ -729,7 +729,7 @@ function vertex_permutation(g::PeriodicGraph{N}, vlist) where N
     return PeriodicGraph{N}(g.ne[], edges, startoffsets)
 end
 
-function LightGraphs.induced_subgraph(g::PeriodicGraph{N}, vlist::AbstractVector{U}) where {N, U<:Integer}
+function Graphs.induced_subgraph(g::PeriodicGraph{N}, vlist::AbstractVector{U}) where {N, U<:Integer}
     allunique(vlist) || __throw_unique_vlist()
     n = length(vlist)
     n == nv(g) && return (vertex_permutation(g, vlist), vlist)
@@ -815,7 +815,7 @@ end
 @noinline __throw_invalid_axesswap() = throw(DimensionMismatch("The number of axes must match the dimension of the graph"))
 
 
-function LightGraphs.connected_components(g::PeriodicGraph)
+function Graphs.connected_components(g::PeriodicGraph)
     nvg = nv(g)
     label = zeros(Int, nvg)
 
@@ -835,7 +835,7 @@ function LightGraphs.connected_components(g::PeriodicGraph)
             end
         end
     end
-    c, d = LightGraphs.components(label)
+    c, d = Graphs.components(label)
     return c
 end
 
@@ -900,7 +900,7 @@ function graph_width!(g::PeriodicGraph{N}) where N
     g.width[] = width == nv(g)+1 ? Rational(maxa) : width
 end
 
-function LightGraphs._neighborhood(g::Union{PeriodicGraph{0},PeriodicGraph{1},PeriodicGraph{2},PeriodicGraph{3}}, v::Integer, d::Real, distmx::AbstractMatrix{U}, neighborfn::Function) where U <: Real
+function Graphs._neighborhood(g::Union{PeriodicGraph{0},PeriodicGraph{1},PeriodicGraph{2},PeriodicGraph{3}}, v::Integer, d::Real, distmx::AbstractMatrix{U}, neighborfn::Function) where U <: Real
     @assert typeof(neighborfn) === typeof(outneighbors)
     N = ndims(g)
     Q = Tuple{PeriodicVertex{N}, U}[]
@@ -932,7 +932,7 @@ function LightGraphs._neighborhood(g::Union{PeriodicGraph{0},PeriodicGraph{1},Pe
     return Q
 end
 
-function LightGraphs._neighborhood(g::PeriodicGraph{N}, v::Integer, d::Real, distmx::AbstractMatrix{U}, neighborfn::Function) where {N,U <: Real}
+function Graphs._neighborhood(g::PeriodicGraph{N}, v::Integer, d::Real, distmx::AbstractMatrix{U}, neighborfn::Function) where {N,U <: Real}
     @assert typeof(neighborfn) === typeof(outneighbors)
     Q = Tuple{PeriodicVertex, U}[]
     d < zero(U) && return Q
@@ -964,7 +964,7 @@ Compute the list of numbers of `n`-th neighbors of vertex `v` in graph `g`, for
 `1 ≤ n ≤ dmax`.
 """
 function coordination_sequence(g::PeriodicGraph, v::Integer, dmax)
-    Q = LightGraphs._neighborhood(g, v, dmax, weights(g), outneighbors)
+    Q = Graphs._neighborhood(g, v, dmax, weights(g), outneighbors)
     popfirst!(Q)
     ret = zeros(Int, dmax)
     for (_, d) in Q

@@ -1,5 +1,5 @@
 using Test
-using LightGraphs
+using Graphs
 using PeriodicGraphs
 import PeriodicGraphs: ofs, vertex_permutation, dimensionality, LoopException, extended_gcd
 import StaticArrays: SVector
