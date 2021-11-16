@@ -63,6 +63,7 @@ end
     @test PeriodicEdge(1, 1, SVector{1,Int}(2)) == PeriodicEdge1D(1, 1, SVector{1,Int}(2))
     @test PeriodicEdge(2, 1, ()) == PeriodicEdge{0}((2, 1, SVector{0,Int}()))
     @test PeriodicEdge((1, 2, (1,0,0))) == PeriodicEdge3D((1, 2, (1,0,0)))
+    @test convert(PeriodicEdge, (3, PeriodicVertex{1}(2, (1,)))) == convert(PeriodicEdge1D, (3, PeriodicVertex{1}(2, (1,))))
     @test PeriodicEdge1D[(1,2,SVector{1,Int}(3))] == PeriodicEdge[(1,2,(3,))] == [PeriodicEdge(1, 2, (3,))]
     @static if VERSION < v"1.6.0-DEV"
         @test string(PeriodicEdge3D[(1, 2, (1,0,0))]) == "PeriodicEdge{3}[(1, 2, (1,0,0))]"
@@ -173,7 +174,7 @@ end
     @testset "Single edge" begin
         @test isempty(edges(g))
         @test isempty(vertices(g))
-        @test !rem_edge!(g, PeriodicEdge(1, 2, (0,0,0)))
+        @test !rem_edge!(g, 1, PeriodicVertex(2, (0,0,0)))
         @test g == PeriodicGraph3D()
         @test !add_edge!(g, PeriodicEdge(1, 1, (-1,0,0)))
         @test g == PeriodicGraph3D()
@@ -182,26 +183,26 @@ end
         @test add_vertex!(g)
         @test !has_edge(g, 1, 1)
         @test !has_edge(g, PeriodicEdge3D(1, 1, (0,1,1)))
-        @test add_edge!(g, PeriodicEdge(1, 1, (-1,0,0)))
+        @test add_edge!(g, 1, PeriodicVertex(1, (-1,0,0)))
         @test has_edge(g, 1, 1)
         @test !add_edge!(g, PeriodicEdge(1, 1, (-1,0,0)))
         @test has_edge(g, 1, 1)
         @test has_edge(g, PeriodicEdge3D(1, 1, (1,0,0)))
-        @test has_edge(g, PeriodicEdge3D(1, 1, (-1,0,0)))
+        @test has_edge(g, 1, PeriodicVertex(1, (-1,0,0)))
         @test g == PeriodicGraph3D(PeriodicEdge3D[(1, 1, (1,0,0))])
         @test g != PeriodicGraph3D(1)
         @test rem_edge!(g, PeriodicEdge(1, 1, (-1,0,0)))
         @test g == PeriodicGraph3D(1)
         @test !has_edge(g, 1, 1)
-        @test !has_edge(g, PeriodicEdge3D(1, 1, (1,0,0)))
+        @test !has_edge(g, 1, PeriodicVertex(1, (1,0,0)))
         @test !has_edge(g, PeriodicEdge3D(1, 1, (-1,0,0)))
-        @test add_edge!(g, PeriodicEdge(1, 1, (2,-1,0)))
+        @test add_edge!(g, 1, PeriodicVertex(1, (2,-1,0)))
         @test !add_edge!(g, PeriodicEdge(1, 1, (-2,1,0)))
         @test g == PeriodicGraph3D(PeriodicEdge3D[(1, 1, (-2,1,0))])
         @test has_edge(g, 1, 1)
         @test has_edge(g, PeriodicEdge3D(1, 1, (2,-1,0)))
         @test !has_edge(g, PeriodicEdge3D(1, 1, (1,0,0)))
-        @test rem_edge!(g, PeriodicEdge(1, 1, (2,-1,0)))
+        @test rem_edge!(g, 1, PeriodicVertex(1, (2,-1,0)))
         @test g == PeriodicGraph3D(1)
         @test add_edge!(g, PeriodicEdge(1, 1, (1,0,0)))
         @test rem_vertex!(g, 1)
@@ -218,12 +219,12 @@ end
         @test rem_edge!(g, PeriodicEdge(1, 2, (0,0,0)))
         @test !has_edge(g, 1, 2)
         @test g == PeriodicGraph3D(2)
-        @test add_edge!(g, PeriodicEdge(1, 2, (-1,0,0)))
+        @test add_edge!(g, 1, PeriodicVertex(2, (-1,0,0)))
         @test g == PeriodicGraph3D(PeriodicEdge3D[(1, 2, (-1,0,0))])
         @test g == PeriodicGraph3D(PeriodicEdge3D[(2, 1, (1,0,0))])
         @test g != PeriodicGraph3D(PeriodicEdge3D[(1, 2, (1,0,0))])
         @test has_edge(g, 1, 2)
-        @test has_edge(g, PeriodicEdge(1, 2, (-1,0,0)))
+        @test has_edge(g, 1, PeriodicVertex(2, (-1,0,0)))
         @test has_edge(g, PeriodicEdge(2, 1, (1,0,0)))
         @test rem_vertex!(g, 1)
         @test g == PeriodicGraph3D(1)
@@ -274,7 +275,7 @@ end
     rem_vertex!(g1, 1)
     @test g1 != g2 == g3
     @test add_edge!(g2, PeriodicEdge(1, 2, (-1,0)))
-    @test add_edge!(g2, PeriodicEdge(1, 1, (1,1)))
+    @test add_edge!(g2, 1, PeriodicVertex(1, (1,1)))
     @test add_edge!(g2, PeriodicEdge(1, 3, (0,0)))
     @test find_edges(g2, 1, 1) == PeriodicVertex2D[(1, (-1,-1)), (1, (1,1))]
     @test find_edges(g2, 1, 2) == PeriodicVertex2D[(2, (-1,0)), (2, (0,0))]
@@ -342,23 +343,23 @@ end
 
     g = PeriodicGraph{0}(4)
     @test add_edge!(g, PeriodicEdge{0}(1, 2, ()))
-    @test add_edge!(g, PeriodicEdge{0}(1, 3, ()))
-    @test add_edge!(g, PeriodicEdge{0}(2, 4, ()))
+    @test add_edge!(g, PeriodicEdge(1, 3, ()))
+    @test add_edge!(g, 2, PeriodicVertex(4, ()))
     @test coordination_sequence(g, 1, 10) == [2, 1, 0, 0, 0, 0, 0, 0, 0, 0,]
 
     g = PeriodicGraph1D(3)
-    @test add_edge!(g, PeriodicEdge(1, 1, (1,)))
+    @test add_edge!(g, PeriodicEdge1D(1, 1, (1,)))
     @test add_edge!(g, PeriodicEdge(1, 2, (0,)))
-    @test add_edge!(g, PeriodicEdge(2, 3, (0,)))
-    @test add_edge!(g, PeriodicEdge(3, 3, (1,)))
+    @test add_edge!(g, 2, PeriodicVertex(3, (0,)))
+    @test add_edge!(g, 3, PeriodicVertex1D(3, (1,)))
     @test coordination_sequence(g, 1, 5) == coordination_sequence(g, 3, 5) == [3, 5, 6, 6, 6]
     @test coordination_sequence(g, 2, 5) == [2, 4, 6, 6, 6]
 
     g = PeriodicGraph{4}(1)
-    @test add_edge!(g, PeriodicEdge(1, 1, (1,0,0,0)))
+    @test add_edge!(g, PeriodicEdge{4}(1, 1, (1,0,0,0)))
     @test add_edge!(g, PeriodicEdge(1, 1, (0,1,0,0)))
-    @test add_edge!(g, PeriodicEdge(1, 1, (0,0,1,0)))
-    @test add_edge!(g, PeriodicEdge(1, 1, (0,0,0,1)))
+    @test add_edge!(g, 1, PeriodicVertex(1, (0,0,1,0)))
+    @test add_edge!(g, 1, PeriodicVertex{4}(1, (0,0,0,1)))
     @test coordination_sequence(g, 1, 30) == [8i*(i^2+2)/3 for i in 1:30] # sequence A008412 of the OEIS
 end
 
@@ -518,13 +519,13 @@ end
     @test equivalent_dict(dimensionality(g), Dict(1 => [[4]], 2 => [[1,2,3]]))
     @test rem_edge!(g, PeriodicEdge(1, 3, (0,0,1)))
     @test equivalent_dict(dimensionality(g), Dict(0 => [[1]], 1 => [[4]], 2 => [[2,3]]))
-    @test rem_edge!(g, PeriodicEdge(3, 2, (0,0,0)))
+    @test rem_edge!(g, 3, PeriodicVertex(2, (0,0,0)))
     @test equivalent_dict(dimensionality(g), Dict(0 => [[1]], 1 => [[4]], 2 => [[2,3]]))
     @test rem_edge!(g, PeriodicEdge(2, 3, (0,1,0)))
     @test equivalent_dict(dimensionality(g), Dict(0 => [[1]], 1 => [[2,3],[4]]))
-    @test add_edge!(g, PeriodicEdge(2, 3, (1,0,-1)))
+    @test add_edge!(g, 2, PeriodicVertex3D(3, (1,0,-1)))
     @test equivalent_dict(dimensionality(g), Dict(0 => [[1]], 1 => [[4]], 2 => [[2,3]]))
-    @test add_edge!(g, PeriodicEdge(2, 3, (2,0,-1)))
+    @test add_edge!(g, 2, PeriodicVertex(3, (2,0,-1)))
     @test equivalent_dict(dimensionality(g), Dict(0 => [[1]], 1 => [[4]], 3 => [[2,3]]))
 end
 

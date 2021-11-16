@@ -158,11 +158,14 @@ function PeriodicEdge((src, dst, offset)::Tuple{Any,Any,Union{SVector{N,T},NTupl
     PeriodicEdge{N}(src, dst, offset)
 end
 
-function convert(::Type{PeriodicEdge{N}}, (src, dst, offset)::Tuple) where {N}
+function convert(::Type{PeriodicEdge{N}}, (src, dst, offset)::Tuple{Any,Any,Any}) where {N}
     PeriodicEdge{N}(src, dst, offset)
 end
 function convert(::Type{PeriodicEdge}, (src, dst, offset)::Tuple{Any,Any,Union{SVector{N,T},NTuple{N,T}}}) where {N,T<:Integer}
     PeriodicEdge{N}(src, dst, offset)
+end
+function convert(::Union{Type{PeriodicEdge},Type{PeriodicEdge{N}}}, (src, v)::Tuple{Any,PeriodicVertex{N}}) where N
+    PeriodicEdge{N}(src, v)
 end
 
 function show(io::IO, x::PeriodicEdge{N}) where N
@@ -466,6 +469,7 @@ function Graphs.has_edge(g::PeriodicGraph, e::PeriodicEdge)
         return i <= length(g.nlist[s]) && g.nlist[s][i] == d
     end
 end
+Graphs.has_edge(g::PeriodicGraph, i, x::PeriodicVertex) = has_edge(g, PeriodicEdge(i, x))
 Graphs.outneighbors(g::PeriodicGraph, v::Integer) = g.nlist[v]
 Graphs.inneighbors(g::PeriodicGraph, v::Integer) = outneighbors(g, v)
 zero(::Type{PeriodicGraph{N}}) where N = PeriodicGraph{N}(0)
@@ -512,6 +516,7 @@ function Graphs.add_edge!(g::PeriodicGraph, e::PeriodicEdge)
     end
     return success
 end
+Graphs.add_edge!(g::PeriodicGraph, i, x::PeriodicVertex) = add_edge!(g, PeriodicEdge(i, x))
 
 function _rem_edge!(g::PeriodicGraph, e::PeriodicEdge, ::Val{check}) where check
     #=@inbounds=# begin
@@ -538,6 +543,7 @@ function Graphs.rem_edge!(g::PeriodicGraph, e::PeriodicEdge)
     end
     return success
 end
+Graphs.rem_edge!(g::PeriodicGraph, i, x::PeriodicVertex) = rem_edge!(g, PeriodicEdge(i, x))
 
 
 function Graphs.SimpleGraphs.rem_vertices!(g::PeriodicGraph{N}, t::AbstractVector{<:Integer}, keep_order::Bool=false) where N
