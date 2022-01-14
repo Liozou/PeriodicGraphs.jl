@@ -247,7 +247,7 @@ This constructor works the fastest when `edge_list` is sorted by the lexical ord
 and does not contain any duplicates.
 
 ## Examples
-```julia
+```jldoctest
 julia> el = PeriodicEdge2D[(1, 1, (1,0)), (1, 3, (0,1)), (3, 1, (0,-1))];
 
 julia> g = PeriodicGraph(el)
@@ -340,7 +340,7 @@ This compact representation of a graph can be obtained simply by `print`ing the 
 or with `string`.
 
 ## Examples
-```julia
+```jldoctest
 julia> PeriodicGraph("2  1 2 0 0  2 1 1 0  1 1 0 -1")
 PeriodicGraph2D(2, PeriodicEdge2D[(1, 1, (0,1)), (1, 2, (-1,0)), (1, 2, (0,0))])
 
@@ -393,8 +393,10 @@ end
 """
     ==(g1::PeriodicGraph, g2::PeriodicGraph)
 
-Test whether two `PeriodicGraph`s have the same representations. Beware that
-two `PeriodicGraph`s may be isomorphic but still have different representations.
+Test whether two `PeriodicGraph`s have the same representations.
+
+!!! warning
+    Two `PeriodicGraph`s may be isomorphic but still have different representations.
 """
 function ==(g1::PeriodicGraph{N}, g2::PeriodicGraph{M}) where {N,M}
     return N == M && nv(g1) == nv(g2) && edges(g1) == edges(g2)
@@ -405,14 +407,14 @@ ndims(::PeriodicEdge{N}) where {N} = N
 ndims(::PeriodicGraph{N}) where {N} = N
 
 """
-    ndims(::PeriodicVertex)
-    ndims(::PeriodicEdge)
-    ndims(::PeriodicGraph)
+    ndims(::PeriodicVertex{N}) where N
+    ndims(::PeriodicEdge{N}) where N
+    ndims(::PeriodicGraph{N}) where N
 
-Return the number of repeating dimensions.
+Return `N`, the number of repeating dimensions.
 
 ## Examples
-```julia
+```jldoctest
 julia> ndims(PeriodicVertex{5}(2))
 5
 
@@ -709,8 +711,12 @@ end
 Return the `PeriodicGraph` corresponding to `g` with its vertices identifiers
 permuted according to `vlist`. `isperm(vlist)` must hold and will not be checked.
 
-See also `induced_subgraph` for the more general case where `vlist` is not a
+See also [`induced_subgraph`](@ref) for the more general case where `vlist` is not a
 permutation.
+
+!!! note
+    The resulting graph is isomorphic to the initial one, only the representation has
+    changed.
 """
 function vertex_permutation(g::PeriodicGraph{N}, vlist) where N
     n = length(vlist)
@@ -769,8 +775,9 @@ end
 In-place modifies graph `g` so that the `i`-th vertex of the new initial cell corresponds
 to the `i`-th vertex in cell `offsets[i]` compared to the previous initial cell.
 
-Note that the resulting graph is isomorphic to the initial one, only the representation
-has changed.
+!!! note
+    The resulting graph is isomorphic to the initial one, only the representation has
+    changed.
 """
 function offset_representatives!(g::PeriodicGraph{N}, offsets) where N
     n = nv(g)
@@ -799,8 +806,9 @@ end
 In-place modifies graph `g` so that the new initial cell corresponds to the previous
 one with its axes swapped according to the permutation `t`.
 
-Note that the resulting graph is isomorphic to the initial one, only the representation
-has changed.
+!!! note
+    The resulting graph is isomorphic to the initial one, only the representation has
+    changed.
 """
 function swap_axes!(g::PeriodicGraph{N}, t) where N
     length(t) == N || __throw_invalid_axesswap()
@@ -845,11 +853,11 @@ function Graphs.connected_components(g::PeriodicGraph)
 end
 
 """
-    graph_width!(g::PeriodicGraph)
+    graph_width!(g::PeriodicGraph{N}) where N
 
 Set the `width` internal field of the graph so that the for all `n` ∈ N\\*,
 the `n`-th neighbor of any vertex `v` of the initial cell is in a cell
-`(i,j,k)` such that `max(abs.((i,k,k))) ≤ 1 + fld((n - 1), width)`.
+`(i_1, i_2, ..., i_N)` such that `max(abs.((i_1, i_2, ..., i_N))) ≤ 1 + fld((n - 1), width)`.
 
 This function is meant for internal use and will be used whenever the `width` field
 is required but unset. If you decide to modify the other internal fields of `g`,
@@ -984,7 +992,7 @@ end
 Extract a simple graph from `g` by only keeping the edges that are strictly
 within the initial cell.
 
-See also `periodiccellgraph` to keep these edges.
+See also [`periodiccellgraph`](@ref) to keep these edges.
 """
 function cellgraph(g::PeriodicGraph)
     edgs = [Edge{Int}(src(x), dst(x)) for x in edges(g) if iszero(ofs(x))]
@@ -1003,7 +1011,7 @@ the initial cell.
 
 Note that these modified edges may turn into loops.
 
-See also `cellgraph` to remove these edges.
+See also [`cellgraph`](@ref) to remove these edges.
 """
 function periodiccellgraph(g::PeriodicGraph)
     ret = SimpleGraph([Edge{Int}(i, j.v) for i in vertices(g) for j in outneighbors(g, i)])
