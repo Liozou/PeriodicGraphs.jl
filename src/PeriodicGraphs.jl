@@ -483,13 +483,13 @@ Graphs.has_vertex(g::PeriodicGraph, v::Integer) = 1 <= v <= nv(g)
 function Graphs.SimpleGraphs.add_vertices!(g::PeriodicGraph{N}, n::Integer) where N
     append!(g.nlist, [PeriodicVertex{N}[] for _ in 1:n])
     append!(g.directedgestart, [1 for _ in 1:n])
-    g.width[] = -1
+    # Note: g.width[] is unchanged as long as there is no modification of the edges
     return n
 end
 function Graphs.SimpleGraphs.add_vertex!(g::PeriodicGraph{N}) where N
     push!(g.nlist, PeriodicVertex{N}[])
     push!(g.directedgestart, 1)
-    g.width[] = -1
+    # Note: g.width[] is unchanged as long as there is no modification of the edges
     true
 end
 
@@ -620,8 +620,10 @@ function Graphs.SimpleGraphs.rem_vertices!(g::PeriodicGraph{N}, t::AbstractVecto
         counter_edges += startoffset - 1
     end
 
-    g.ne[] = counter_edges
-    g.width[] = -1
+    if g.ne[] != counter_edges
+        g.ne[] = counter_edges
+        g.width[] = -1
+    end # otherwise, no modification to the width either
 
     return vmap
 end
