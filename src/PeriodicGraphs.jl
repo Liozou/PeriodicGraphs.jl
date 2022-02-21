@@ -13,7 +13,7 @@ export PeriodicVertex, PeriodicEdge, PeriodicGraph,
        dimensionality, change_dimension
 
 import Base: (==), isless, convert, show, showerror, eltype, iterate, zero,
-             length, in, ndims, print, cmp
+             length, in, ndims, print, cmp, hash
 import Base.Order: Forward, Lt
 
 """
@@ -54,6 +54,7 @@ function cmp(x::PeriodicVertex{N}, y::PeriodicVertex{N}) where N
 end
 isless(x::PeriodicVertex{N}, y::PeriodicVertex{N}) where {N} = cmp(x, y) < 0
 ==(x::PeriodicVertex{N}, y::PeriodicVertex{M}) where {N,M} = N == M && iszero(cmp(x, y))
+hash(x::PeriodicVertex, h::UInt) = hash(x.ofs, hash(x.v, h))
 
 const PeriodicVertex1D = PeriodicVertex{1}
 const PeriodicVertex2D = PeriodicVertex{2}
@@ -203,6 +204,7 @@ function cmp(x::PeriodicEdge{N}, y::PeriodicEdge{N}) where N
 end
 isless(x::PeriodicEdge{N}, y::PeriodicEdge{N}) where {N} = cmp(x, y) < 0
 ==(x::PeriodicEdge{N}, y::PeriodicEdge{M}) where {N,M} = N == M && iszero(cmp(x, y))
+hash(x::PeriodicEdge, h::UInt) = hash(x.dst, hash(x.src, h))
 
 
 """
@@ -400,6 +402,14 @@ Test whether two `PeriodicGraph`s have the same representations.
 """
 function ==(g1::PeriodicGraph{N}, g2::PeriodicGraph{M}) where {N,M}
     return N == M && nv(g1) == nv(g2) && edges(g1) == edges(g2)
+end
+
+function hash(g::PeriodicGraph, h::UInt)
+    ret = h
+    for e in edges(g)
+        ret = hash(e, ret)
+    end
+    return ret
 end
 
 ndims(::PeriodicVertex{N}) where {N} = N
