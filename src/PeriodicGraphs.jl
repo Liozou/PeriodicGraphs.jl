@@ -223,8 +223,8 @@ const PeriodicGraph1D = PeriodicGraph{1}
 const PeriodicGraph2D = PeriodicGraph{2}
 const PeriodicGraph3D = PeriodicGraph{3}
 
-function PeriodicGraph{N}(nv::Integer, t, s) where N
-    return PeriodicGraph{N}(Ref(nv), t, s, Ref(-1//1))
+function PeriodicGraph{N}(ne::Integer, t, s) where N
+    return PeriodicGraph{N}(Ref(ne), t, s, Ref(-1//1))
 end
 
 """
@@ -233,9 +233,81 @@ end
 Construct a `PeriodicGraph{N}` with `nv` vertices and 0 edge.
 """
 function PeriodicGraph{N}(n::Integer = 0) where N
-    @assert n >= 0
     return PeriodicGraph{N}(0, [PeriodicVertex{N}[] for _ in 1:n], [1 for _ in 1:n])
 end
+
+function from_edges(nv, t::AbstractVector{PeriodicEdge{N}}) where {N}
+    isempty(t) && return PeriodicGraph{N}(nv)
+
+    directedgestart = ones(Int, nv)
+    counterdirect = zeros(Int, nv)
+    numdifferentindirect = zeros(Int, nv)
+    last_e = first(t)
+    numdifferentindirect[last_e.dst.v] = 1
+    for e in t
+        s = e.src
+        d = e.dst.v
+        directedgestart[d] += 1
+        counterdirect[s] += 1
+        numdifferentindirect[d] += ((s != last_e.src) | (d != last_e.dst.v))
+        last_e = e
+    end
+
+    nlist = Vector{Vector{PeriodicVertex{N}}}(undef, nv)
+    counterindirect = Vector{Vector{Int}}(undef, nv)
+    for i in 1:nv
+        nlist[i] = Vector{PeriodicVertex{N}}(undef, counterdirect[i] + directedgestart[i] - 1)
+        counterdirect[i] = 0
+        counterindirect[i] = zeros(Int, numdifferentindirect[i] + 1)
+    end
+
+    # First pass: set the direct edges
+    idx_indirect = ones(Int, nv)
+    last_e = first(t)
+    for e in t
+        s = e.src
+        d = e.dst.v
+        nlist[s][directedgestart[s] + counterdirect[s]] = e.dst
+        counterdirect[s] += 1
+        if ((s != last_e.src) | (d != last_e.dst.v))
+            last_d = last_e.dst.v
+            idx_indirect[last_d] += 1
+            val = idx_indirect[last_d]
+            counterindirect[last_d][val] += counterindirect[last_d][val-1]
+        end
+        counterindirect[d][idx_indirect[d]] += 1
+        last_e = e
+    end
+
+    @simd for i in 1:nv; idx_indirect[i] = 1; end
+
+    # Second pass: set the indirect edges
+    last_e = first(t)
+    current_idx = idx_indirect[last_e.dst.v]
+    for e in t
+        s = e.src
+        d = e.dst.v
+        if ((s != last_e.src) | (d != last_e.dst.v))
+            idx_indirect[last_e.dst.v] += 1
+            current_idx = idx_indirect[d]
+        end
+        nlist[d][counterindirect[d][current_idx]] = PeriodicVertex(s, .- e.dst.ofs)
+        counterindirect[d][current_idx] -= 1
+        last_e = e
+    end
+
+    return PeriodicGraph{N}(length(t), nlist, directedgestart)
+end
+
+function from_edges(t::AbstractVector{PeriodicEdge{N}}) where N
+    @static if VERSION < v"1.6-"
+        isempty(t) && return from_edges(0, t)
+        return from_edges(maximum(max(e.src, e.dst.v) for e in t), t)
+    else
+        return from_edges(maximum(max(e.src, e.dst.v) for e in t; init=0), t)
+    end
+end
+
 """
     PeriodicGraph([nv::Integer, ]edge_list::AbstractVector{PeriodicEdge{N}})
     PeriodicGraph{N}([nv::Integer, ]edge_list::AbstractVector{PeriodicEdge{N}})
@@ -260,21 +332,22 @@ julia> ne(g)
 ```
 """
 function PeriodicGraph{N}(nv::Integer, t::AbstractVector{PeriodicEdge{N}}) where N
-    sort!(t); unique!(t)
-    ne = length(t)
-    g = PeriodicGraph{N}(nv)
-    for e in t
-        add_edge!(g, e)
+    for (i, e) in enumerate(t)
+        if isindirectedge(e)
+            t[i] = reverse(e)
+        end
     end
-    return g
+    sort!(t); unique!(t)
+    return from_edges(nv, t)
 end
+
 PeriodicGraph(nv::Integer, t::AbstractVector{PeriodicEdge{N}}) where {N} = PeriodicGraph{N}(nv, t)
 function PeriodicGraph{N}(t::AbstractVector{PeriodicEdge{N}}) where N
     @static if VERSION < v"1.6-"
-        isempty(t) && return PeriodicGraph(0, t)
-        return PeriodicGraph(maximum(max(e.src, e.dst.v) for e in t), t)
+        isempty(t) && return PeriodicGraph{N}(0, t)
+        return PeriodicGraph{N}(maximum(max(e.src, e.dst.v) for e in t), t)
     else
-        return PeriodicGraph(maximum(max(e.src, e.dst.v) for e in t; init=0), t)
+        return PeriodicGraph{N}(maximum(max(e.src, e.dst.v) for e in t; init=0), t)
     end
 end
 PeriodicGraph(t::AbstractVector{PeriodicEdge{N}}) where {N} = PeriodicGraph{N}(t)
@@ -325,6 +398,19 @@ end
 Base.isempty(k::KeyString) = isempty(SubString(k.x, k.start[]))
 Base.IteratorSize(::Type{<:KeyString}) = Base.SizeUnknown()
 
+function edges_from_string(key::KeyString{Int}, ::Val{N}) where N
+    edgs = PeriodicEdge{N}[]
+    while !isempty(key)
+        src = popfirst!(key)
+        dst = popfirst!(key)
+        ofs = SVector{N,Int}([popfirst!(key) for _ in 1:N])
+        push!(edgs, PeriodicEdge{N}(src, dst, ofs))
+    end
+    return edgs
+end
+
+
+
 """
     PeriodicGraph(key::AbstractString)
     PeriodicGraph{N}(key::AbstractString)
@@ -341,6 +427,10 @@ and for all `i` between `1` and `m`, the number of edges, the `i`-th edge is des
 This compact representation of a graph can be obtained simply by `print`ing the graph
 or with `string`.
 
+!!! note
+    Use `parse(PeriodicGraph, key)` or `parse(PeriodicGraph{N}, key)` for a faster
+    implementation if `key` was obtained from `string(g)` with `g` a `PeriodicGraph{N}`.
+
 ## Examples
 ```jldoctest
 julia> PeriodicGraph("2  1 2 0 0  2 1 1 0  1 1 0 -1")
@@ -352,7 +442,7 @@ PeriodicGraph3D(1, PeriodicEdge3D[(1, 1, (0,0,1)), (1, 1, (0,1,0)), (1, 1, (1,0,
 julia> string(ans)
 "3 1 1 0 0 1 1 1 0 1 0 1 1 1 0 0"
 
-julia> string(PeriodicGraph(ans)) == ans
+julia> string(parse(PeriodicGraph3D, ans)) == ans
 true
 ```
 """
@@ -360,24 +450,24 @@ function PeriodicGraph{N}(s::AbstractString) where N
     key = KeyString{Int}(s)
     M = popfirst!(key)
     M != N && throw(DimensionMismatch("Cannot construct a $N-dimensional graph from a $M-dimensional key"))
-    edgs = PeriodicEdge{N}[]
-    while !isempty(key)
-        src = popfirst!(key)
-        dst = popfirst!(key)
-        ofs = SVector{N,Int}([popfirst!(key) for _ in 1:N])
-        push!(edgs, PeriodicEdge{N}(src, dst, ofs))
-    end
-    return PeriodicGraph{N}(edgs)
+    return PeriodicGraph{N}(edges_from_string(key, Val(N)))
 end
 function PeriodicGraph(s::AbstractString)
-    N = first(KeyString{Int}(s))
-    return PeriodicGraph{N}(s)
+    key = KeyString{Int}(s)
+    N = popfirst!(key)
+    return PeriodicGraph{N}(edges_from_string(key, Val(N)))
 end
-function PeriodicGraph{N}(g::PeriodicGraph{N}) where N
-    PeriodicGraph{N}(g.ne[], [copy(x) for x in g.nlist], copy(g.directedgestart))
-end
-PeriodicGraph(g::PeriodicGraph{N}) where {N} = PeriodicGraph{N}(g)
 
+function Base.parse(::Type{PeriodicGraph{N}}, s::AbstractString) where N
+    key = KeyString{Int}(s)
+    popfirst!(key) # No verification is done for this function
+    return from_edges(edges_from_string(key, Val(N)))
+end
+function Base.parse(::Type{PeriodicGraph}, s::AbstractString)
+    key = KeyString{Int}(s)
+    N = popfirst!(key)
+    return from_edges(edges_from_string(key, Val(N)))
+end
 
 function show(io::IO, g::PeriodicGraph{N}) where N
     if get(io, :typeinfo, Any) != PeriodicGraph{N}
@@ -391,6 +481,13 @@ function print(io::IO, g::PeriodicGraph{N}) where N
         print(io, ' ', e.src, ' ', e.dst.v, ' ', join(e.dst.ofs, ' '))
     end
 end
+
+
+function PeriodicGraph{N}(g::PeriodicGraph{N}) where N
+    PeriodicGraph{N}(g.ne[], [copy(x) for x in g.nlist], copy(g.directedgestart))
+end
+PeriodicGraph(g::PeriodicGraph{N}) where {N} = PeriodicGraph{N}(g)
+Base.copy(g::PeriodicGraph{N}) where {N} = PeriodicGraph{N}(g)
 
 """
     ==(g1::PeriodicGraph, g2::PeriodicGraph)
@@ -925,8 +1022,7 @@ function graph_width!(g::PeriodicGraph{N}) where N
     g.width[] = width == nv(g)+1 ? Rational(maxa) : width
 end
 
-function Graphs._neighborhood(g::Union{PeriodicGraph{0},PeriodicGraph{1},PeriodicGraph{2},PeriodicGraph{3}}, v::Integer, d::Real, distmx::AbstractMatrix{U}, neighborfn::Function) where U <: Real
-    @assert typeof(neighborfn) === typeof(outneighbors)
+function Graphs._neighborhood(g::Union{PeriodicGraph{0},PeriodicGraph{1},PeriodicGraph{2},PeriodicGraph{3}}, v::Integer, d::Real, distmx::AbstractMatrix{U}, ::typeof(outneighbors)) where U <: Real
     N = ndims(g)
     Q = Tuple{PeriodicVertex{N}, U}[]
     d < zero(U) && return Q
@@ -957,8 +1053,7 @@ function Graphs._neighborhood(g::Union{PeriodicGraph{0},PeriodicGraph{1},Periodi
     return Q
 end
 
-function Graphs._neighborhood(g::PeriodicGraph{N}, v::Integer, d::Real, distmx::AbstractMatrix{U}, neighborfn::Function) where {N,U <: Real}
-    @assert typeof(neighborfn) === typeof(outneighbors)
+function Graphs._neighborhood(g::PeriodicGraph{N}, v::Integer, d::Real, distmx::AbstractMatrix{U}, ::typeof(outneighbors)) where {N,U <: Real}
     Q = Tuple{PeriodicVertex, U}[]
     d < zero(U) && return Q
     start_vertex = PeriodicVertex{N}(v)

@@ -7,12 +7,6 @@ import StaticArrays: SVector
 # using Aqua
 # Aqua.test_all(PeriodicGraphs)
 
-@static if VERSION < v"1.4-"
-    function only(t)
-        length(t) == 1 || throw(ArgumentError("Not exactly 1 element"))
-        return t[1]
-    end
-end
 
 @testset "PeriodicVertex" begin
     @test_throws MethodError PeriodicVertex2D() # Always require a vertex identifier
@@ -22,6 +16,9 @@ end
     @test PeriodicVertex{4}(5) == PeriodicVertex{4}(5)
     @test PeriodicVertex1D(1, SVector{1,Int}(3)) == PeriodicVertex1D(1, [3])
     @test PeriodicVertex(3, (1,2)) == PeriodicVertex2D(3, (1,2)) == PeriodicVertex(3, SVector{2,Int}(1,2))
+    h = hash(PeriodicVertex(3, (1,2)))
+    @test h == hash(PeriodicVertex(3, SVector{2,Int}(1,2)))
+    @test hash(PeriodicVertex2D(3)) != h != hash(PeriodicVertex3D(3, (1,2,0))) != hash(PeriodicVertex(2, (1,2)))
     @test PeriodicVertex[(1, (-1,0))] == [PeriodicVertex2D(1, (-1,0))] == PeriodicVertex2D[(1, (-1,0))]
     @test_throws MethodError PeriodicVertex(2, [4]) # Performance trap if the dimension is unknown
     @test_throws DimensionMismatch PeriodicVertex2D(1, (2,))
@@ -63,6 +60,8 @@ end
     @test PeriodicEdge(1, 1, SVector{1,Int}(2)) == PeriodicEdge1D(1, 1, SVector{1,Int}(2))
     @test PeriodicEdge(2, 1, ()) == PeriodicEdge{0}((2, 1, SVector{0,Int}()))
     @test PeriodicEdge((1, 2, (1,0,0))) == PeriodicEdge3D((1, 2, (1,0,0)))
+    @test hash(PeriodicEdge((1, 2, (1,0,0)))) == hash(PeriodicEdge3D((1, 2, (1,0,0))))
+    @test hash(PeriodicEdge((1, 2, (1,)))) != hash(PeriodicEdge((2, 1, (-1,))))
     @test convert(PeriodicEdge, (3, PeriodicVertex{1}(2, (1,)))) == convert(PeriodicEdge1D, (3, PeriodicVertex{1}(2, (1,))))
     @test PeriodicEdge1D[(1,2,SVector{1,Int}(3))] == PeriodicEdge[(1,2,(3,))] == [PeriodicEdge(1, 2, (3,))]
     @static if VERSION < v"1.6.0-DEV"
@@ -122,12 +121,53 @@ end
     @test !has_vertex(g, 1)
 end
 
+
+function naive_periodicgraph(nv::Integer, t::AbstractVector{PeriodicEdge{N}}) where N
+    sort!(t); unique!(t)
+    g = PeriodicGraph{N}(nv)
+    for e in t
+        add_edge!(g, e)
+    end
+    return g
+end
+
+function is_well_formed(g::PeriodicGraph{N}) where N
+    isempty(g.nlist) || sum(length, g.nlist) == 2*g.ne[] || return false
+    for (i, l) in enumerate(g.nlist)
+        if isempty(l)
+            g.directedgestart[i] == 1 || return false
+            continue
+        end
+        issorted(l) || return false
+        allunique(l) || return false
+        any(==(PeriodicVertex{N}(i)), l) && return false
+        dedgestart = g.directedgestart[i]
+        if dedgestart > length(l)
+            dedgestart == length(l) + 1 || return false
+            PeriodicGraphs.isindirectedge(PeriodicEdge{N}(i, l[end])) || return false
+            continue
+        end
+        PeriodicGraphs.isindirectedge(PeriodicEdge{N}(i, l[dedgestart])) && return false
+        if dedgestart != 1 && !PeriodicGraphs.isindirectedge(PeriodicEdge{N}(i, l[dedgestart-1]))
+            return false
+        end
+        for j in dedgestart:length(l)
+            rev = PeriodicVertex{N}(i, .- l[j].ofs)
+            any(==(rev), g.nlist[l[j].v]) || return false
+        end
+    end
+    g.width[] == -1 || g.width[] > 0 || return false
+    return true
+end
+
 @testset "Basic graph construction and modification" begin
     @test_throws MethodError PeriodicGraph(2) # missing dimension
     g = PeriodicGraph3D()
+    @test is_well_formed(g)
 
     @testset "add_vertex!, rem_vertex!" begin
         @test add_vertex!(g)
+        @test is_well_formed(g)
         @test ne(g) == 0 && nv(g) == 1
         @test g == PeriodicGraph3D(1)
         @test add_vertex!(g)
@@ -136,6 +176,7 @@ end
         @test_throws ArgumentError rem_vertex!(g, 0)
         @test_throws ArgumentError rem_vertex!(g, 3)
         @test rem_vertex!(g, 1)
+        @test is_well_formed(g)
         @test ne(g) == 0 && nv(g) == 1
         @test g == PeriodicGraph3D(1)
         @test rem_vertex!(g, 1)
@@ -155,17 +196,20 @@ end
         @test only(vertices(g)) == 1
         @test rem_vertices!(g, [1]) == Int[]
         @test add_vertices!(g, 5) == 5
+        @test is_well_formed(g)
         @test ne(g) == 0 && nv(g) == 5 && g == PeriodicGraph3D(5)
         @test vertices(g) == 1:5
         @test issetequal(rem_vertices!(g, [2,3]), [1,4,5])
         @test ne(g) == 0 && nv(g) == 3 && g == PeriodicGraph3D(3)
         @test vertices(g) == 1:3
         @test rem_vertex!(g, 2)
+        @test is_well_formed(g)
         @test ne(g) == 0 && nv(g) == 2 && g == PeriodicGraph3D(2)
         @test vertices(g) == [1,2]
         @test rem_vertices!(g, [1,2]) == Int[]
         @test add_vertices!(g, 5) == 5
         @test rem_vertices!(g, [2,4], true) == [1,3,5]
+        @test is_well_formed(g)
         @test g == PeriodicGraph3D(3)
         @test rem_vertices!(g, [1,2,3], true) == Int[]
         @test g == PeriodicGraph3D()
@@ -184,6 +228,7 @@ end
         @test !has_edge(g, 1, 1)
         @test !has_edge(g, PeriodicEdge3D(1, 1, (0,1,1)))
         @test add_edge!(g, 1, PeriodicVertex(1, (-1,0,0)))
+        @test is_well_formed(g)
         @test has_edge(g, 1, 1)
         @test !add_edge!(g, PeriodicEdge(1, 1, (-1,0,0)))
         @test has_edge(g, 1, 1)
@@ -192,6 +237,7 @@ end
         @test g == PeriodicGraph3D(PeriodicEdge3D[(1, 1, (1,0,0))])
         @test g != PeriodicGraph3D(1)
         @test rem_edge!(g, PeriodicEdge(1, 1, (-1,0,0)))
+        @test is_well_formed(g)
         @test g == PeriodicGraph3D(1)
         @test !has_edge(g, 1, 1)
         @test !has_edge(g, 1, PeriodicVertex(1, (1,0,0)))
@@ -238,6 +284,52 @@ end
         @test ne(g) == 0
         @test nv(g) == 1
     end
+
+    @testset "Multiple edges" begin
+        edgs1 = PeriodicEdge2D[(1, 1, (0,1)), (1, 1, (-1,0)), (1, 1, (1,0))]
+        g1 = PeriodicGraph(edgs1)
+        @test nv(g1) == 1
+        @test ne(g1) == 2
+        @test is_well_formed(g1)
+        @test g1 == naive_periodicgraph(1, edgs1) == PeriodicGraph(1, edgs1)
+        _edgs1 = collect(edges(g1))
+        @test g1 == PeriodicGraph(_edgs1)
+
+        edgs2 = PeriodicEdge2D[(3, 1, (0,0)), (2, 3, (0,0)), (1, 1, (2,0)), (1, 3, (0,1))]
+        g2 = PeriodicGraph(edgs2)
+        @test nv(g2) == 3
+        @test ne(g2) == 4
+        @test is_well_formed(g2)
+        @test g2 == naive_periodicgraph(3, edgs2) == PeriodicGraph(3, edgs2)
+        _edgs2 = collect(edges(g2))
+        @test g2 == PeriodicGraph(_edgs2)
+        sort!(_edgs2)
+        @test g2 == PeriodicGraphs.from_edges(_edgs2) == PeriodicGraphs.from_edges(3, _edgs2)
+
+        edgs3 = PeriodicEdge2D[(1, 1, (0,1)), (1, 1, (1,0)), (1, 1, (2,0)), (1, 2, (0,1)),
+                               (1, 3, (-1,0)), (1, 3, (0,1)), (2, 3, (0,0)), (3, 4, (0,0))]
+        g3 = PeriodicGraph(edgs3)
+        @test nv(g3) == 4
+        @test ne(g3) == 8
+        @test is_well_formed(g3)
+        @test g3 == naive_periodicgraph(4, edgs3) == PeriodicGraph(4, edgs3)
+        _edgs3 = collect(edges(g3))
+        @test g3 == PeriodicGraph(_edgs3)
+        sort!(_edgs3)
+        @test g3 == PeriodicGraphs.from_edges(_edgs3) == PeriodicGraphs.from_edges(4, _edgs3)
+
+        edgs4 = PeriodicEdge3D[(2, 3, (-1,0,0)), (2, 3, (0,1,0)), (4, 4, (1,-1,0)),
+                               (1, 3, (0,0,1)), (3, 2, (0,0,0))]
+        g4 = PeriodicGraph(edgs4)
+        @test nv(g4) == 4
+        @test ne(g4) == 5
+        @test is_well_formed(g4)
+        @test g4 == naive_periodicgraph(4, edgs4) == PeriodicGraph(4, edgs4)
+        _edgs4 = collect(edges(g4))
+        @test g4 == PeriodicGraph(_edgs4)
+        sort!(_edgs4)
+        @test g4 == PeriodicGraphs.from_edges(_edgs4) == PeriodicGraphs.from_edges(4, _edgs4)
+    end
 end
 
 @testset "String graph construction" begin
@@ -257,7 +349,12 @@ end
     @test_throws ArgumentError PeriodicGraph{4}("4 1")
     @test_throws ArgumentError PeriodicGraph("2 1 1 0 1 0")
     @test_throws LoopException PeriodicGraph("3 1 1 0 0 0")
-    @test string(PeriodicGraph("2 1 2 0 0 2 3 1 0")) == "2 1 2 0 0 2 3 1 0"
+    g = PeriodicGraph("2 1 2 0 0 2 3 1 0")
+    sg = string(g)
+    @test sg == "2 1 2 0 0 2 3 1 0"
+    @test parse(PeriodicGraph, sg) == g
+    @test parse(PeriodicGraph2D, sg) == g
+    @test PeriodicGraph(sg) == g
     @test string(PeriodicGraph("1    23 4  5    10  9 43")) == "1 4 23 -5 9 10 -43"
     @test string(PeriodicGraph{5}()) == "5"
 end
@@ -272,8 +369,10 @@ end
     g2 = PeriodicGraph(g1)
     g3 = deepcopy(g1)
     @test g1 == g2 == g3
+    @test hash(g1) == hash(g2) == hash(g3)
     rem_vertex!(g1, 1)
     @test g1 != g2 == g3
+    @test hash(g1) != hash(g2) == hash(g3)
     @test add_edge!(g2, PeriodicEdge(1, 2, (-1,0)))
     @test add_edge!(g2, 1, PeriodicVertex(1, (1,1)))
     @test add_edge!(g2, PeriodicEdge(1, 3, (0,0)))
@@ -310,6 +409,7 @@ end
     @test_throws ArgumentError offset_representatives!(gg, [2])
     gcopy = deepcopy(g)
     @test offset_representatives!(g, [0,0,0,0]) == gcopy == g
+    @test is_well_formed(g)
     ggg = offset_representatives!(gg, [(1,-1,1),0])
     @test ggg == gg
     @test collect(edges(gg)) == PeriodicEdge3D[(1, 2, (1,-1,0)), (2, 2, (1,0,0))]
@@ -318,6 +418,7 @@ end
     @test gg == gcopy
     @test_throws DimensionMismatch swap_axes!(g, [1,3])
     ggg = swap_axes!(gg, (1,2,3))
+    @test is_well_formed(ggg)
     @test gcopy == gg == ggg
     ggg = swap_axes!(gg, (2,1,3))
     @test gcopy != gg == ggg
@@ -330,6 +431,7 @@ end
     g = PeriodicGraph3D(1)
     @test add_vertices!(g, 2) == 2
     @test add_edge!(g, PeriodicEdge3D(2, 3, (0, 0, 1)))
+    @test is_well_formed(g)
     @test only(neighbors(g, 2)) == PeriodicVertex3D(3, (0, 0, 1))
     @test only(neighbors(g, 3)) == PeriodicVertex3D(2, (0, 0, -1))
     @test !has_edge(g, 2, 2)
@@ -467,8 +569,10 @@ end
                                           PeriodicEdge3D(4, 4, (1, 1, 0))])
     gg = deepcopy(g)
     @test rem_vertices!(g, Int[]) == [1, 2, 3, 4]
+    @test is_well_formed(g)
     @test g == gg
     @test rem_vertices!(g, [2, 4], false) == [1, 3]
+    @test is_well_formed(g)
     @test nv(g) == 2
     @test ne(g) == 1
     @test neighbors(g, 1) == PeriodicVertex3D[(2, (0, 0, 1))]
@@ -488,6 +592,7 @@ end
             2 5  0 0
             4 5  1 1")
     g2 = deepcopy(g1)
+    @test g2 == parse(PeriodicGraph, string(g1))
     @test rem_vertices!(g1, [2,4], false) == [1, 5, 3]
     @test g1 == PeriodicGraph("2 1 1 1 0 1 3 0 0")
     @test rem_vertices!(g2, [2,4], true) == [1, 3, 5]
