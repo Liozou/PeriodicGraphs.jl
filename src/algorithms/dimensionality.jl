@@ -2,7 +2,7 @@ import Base.GMP.MPZ
 import LinearAlgebra: det
 using StaticArrays
 
-
+export dimensionality, change_dimension
 
 # Algorithm 3 from George Havas, Bohdan S. Majewski, and Keith R. Matthews,
 # "Extended GCD and Hermite Normal Form Algorithms via Lattice Basis Reduction"
