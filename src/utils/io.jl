@@ -104,15 +104,19 @@ function PeriodicGraph(s::AbstractString)
     return PeriodicGraph{N}(edges_from_string(key, Val(N)))
 end
 
+function _parse(::Type{PeriodicGraph{N}}, key::KeyString{Int})::PeriodicGraph{N} where N
+    return from_edges(edges_from_string(key, Val(N)))
+end
+
 function Base.parse(::Type{PeriodicGraph{N}}, s::AbstractString) where N
     key = KeyString{Int}(s)
     popfirst!(key) # No verification is done for this function
-    return from_edges(edges_from_string(key, Val(N)))
+    return _parse(PeriodicGraph{N}, key)
 end
 function Base.parse(::Type{PeriodicGraph}, s::AbstractString)
     key = KeyString{Int}(s)
     N = popfirst!(key)
-    return from_edges(edges_from_string(key, Val(N)))
+    return _parse(PeriodicGraph{N}, key)
 end
 
 function show(io::IO, g::PeriodicGraph{N}) where N
