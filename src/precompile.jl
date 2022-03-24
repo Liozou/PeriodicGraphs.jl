@@ -24,8 +24,11 @@ function _precompile_()
         @enforce Base.precompile(Tuple{Type{PeriodicGraph{i}},SubString{String}})
         @enforce Base.precompile(Tuple{Type{PeriodicGraph},PeriodicGraph{i}})
         @enforce Base.precompile(Tuple{typeof(copy),PeriodicGraph{i}})
-        @enforce Base.precompile(Tuple{typeof(Base.parse),Type{PeriodicGraph{i}},String})
-        @enforce Base.precompile(Tuple{typeof(Base.parse),Type{PeriodicGraph{i}},SubString{String}})
+        for S in (String, SubString{String})
+            @enforce Base.precompile(Tuple{typeof(edges_from_string), KeyString{Int,S}, Val{i}})
+            @enforce Base.precompile(Tuple{typeof(_parse), Type{PeriodicGraph{i}}, KeyString{Int,S}})
+            @enforce Base.precompile(Tuple{typeof(Base.parse), Type{PeriodicGraph{i}}, S})
+        end
 
         @enforce Base.precompile(Tuple{typeof(==),PeriodicVertex{i},PeriodicVertex{i}})
         @enforce Base.precompile(Tuple{typeof(<),PeriodicVertex{i},PeriodicVertex{i}})
