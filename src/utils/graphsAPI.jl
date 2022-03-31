@@ -297,3 +297,35 @@ function Graphs.induced_subgraph(g::PeriodicGraph{N}, vlist::AbstractVector{U}) 
     return (PeriodicGraph{N}(ne, edges, startoffsets), vlist)
 end
 @noinline __throw_unique_vlist() = throw(ArgumentError("Vertices in subgraph list must be unique"))
+
+
+struct PeriodicNeighborList{D}
+    ofs::SVector{D,Int}
+    nlist::Vector{PeriodicVertex{D}}
+end
+function iterate(x::PeriodicNeighborList{D}, state=1) where D
+    state > length(x.nlist) && return nothing
+    neigh = @inbounds x.nlist[state]
+    return (PeriodicVertex{D}(neigh.v, neigh.ofs .+ x.ofs), state+1)
+end
+length(x::PeriodicNeighborList{D}) where {D} = length(x.nlist)
+eltype(::Type{PeriodicNeighborList{D}}) where {D} = PeriodicVertex{D}
+
+for (neigh, deg) in ((:neighbors, :degree),
+                     (:inneighbors, :indegree),
+                     (:outneighbors, :outdegree))
+    @eval begin
+        function (Graphs.$neigh)(g::PeriodicGraph{D}, u::PeriodicVertex{D}) where D
+            PeriodicNeighborList{D}(u.ofs, g.nlist[u.v])
+        end
+        function (Graphs.$deg)(g::PeriodicGraph{D}, u::PeriodicVertex{D}) where D
+            length(($neigh)(g, u))
+        end
+    end
+end
+
+function show(io::IO, l::PeriodicNeighborList{D}) where D
+    print(io, PeriodicVertex{D}, '[')
+    join(IOContext(io, :typeinfo => PeriodicVertex{D}), l, ", ")
+    print(io, ']')
+end
