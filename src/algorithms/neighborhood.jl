@@ -20,6 +20,8 @@ if you only modify the graph using the official API (i.e. if you never directly 
 the fields).
 """
 function graph_width!(g::PeriodicGraph{N}) where N
+    previous_width = g.width[]
+    previous_width == -1 || return previous_width
     distances = floyd_warshall_shortest_paths(cellgraph(g)).dists
     extremalpoints = NTuple{N,NTuple{2,Vector{Tuple{Int,Int}}}}([([],[]) for _ in 1:N])
     # a, x ∈ extremalpoints[i][j] where i ∈ ⟦1,N⟧ and j ∈ ⟦1,2⟧ means that
@@ -70,10 +72,7 @@ function Graphs._neighborhood(g::Union{PeriodicGraph{0},PeriodicGraph{1},Periodi
     start_vertex = PeriodicVertex{N}(v)
     push!(Q, (start_vertex, zero(U),) )
     n = nv(g)
-    width = g.width[]
-    if width == -1
-        width = graph_width!(g)
-    end
+    width = graph_width!(g)
     seen_size = n*(2*(1 + fld(d-1, width)) + 1)^N
     seen = falses(seen_size)
     seen[hash_position(start_vertex, n)] = true

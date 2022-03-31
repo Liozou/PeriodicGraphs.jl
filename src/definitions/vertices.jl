@@ -47,8 +47,9 @@ const PeriodicVertex2D = PeriodicVertex{2}
 const PeriodicVertex3D = PeriodicVertex{3}
 
 
-ZtoN(x::Signed) = -(x<0) + 2*abs(x)
-function hash_position((x1,x2,x3)::SVector{3,<:Integer})
+@inline ZtoN(x::Signed) = -(x<0) + 2*abs(x)
+@inline function hash_position(x::SVector{3,<:Integer})
+    @inbounds begin x1 = x[1]; x2 = x[2]; x3 = x[3] end
     x1 = ZtoN(x1); x2 = ZtoN(x2); x3 = ZtoN(x3)
     _b = x1 >= x2
     b1 = _b & (x1 >= x3)
@@ -59,17 +60,18 @@ function hash_position((x1,x2,x3)::SVector{3,<:Integer})
            b3*((x3 + 1)*(2x3 + 1) + x3*(x1 + x3^2) + x2)
 end
 
-function hash_position((x1,x2)::SVector{2,<:Integer})
+@inline function hash_position(x::SVector{2,<:Integer})
+    @inbounds begin x1 = x[1]; x2 = x[2] end
     x1 = ZtoN(x1); x2 = ZtoN(x2)
     b = x1 >= x2
     return b*(x2 + x1^2) + (!b)*(x1 + x2*(x2 + 1) + 1)
 end
 
-function hash_position((x,)::SVector{1,<:Integer})
-    return ZtoN(x)
+@inline function hash_position(x::SVector{1,<:Integer})
+    return ZtoN(@inbounds x[1])
 end
 
-function hash_position(::SVector{0,<:Integer})
+@inline function hash_position(::SVector{0,<:Integer})
     return 0
 end
 
@@ -85,7 +87,7 @@ the set of positive integers. Its value is an integer between `1+n\\*(2d-1)^N`
 This means that when one unit cell A is further than another B (for the Manhattan
 distance), all vertices in A will have a larger hash than all vertices in B.
 """
-function hash_position(x::PeriodicVertex, n::Integer)
+@inline function hash_position(x::PeriodicVertex, n::Integer)
     return x.v + n*hash_position(x.ofs)
 end
 
