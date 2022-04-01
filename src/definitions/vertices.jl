@@ -46,15 +46,17 @@ const PeriodicVertex1D = PeriodicVertex{1}
 const PeriodicVertex2D = PeriodicVertex{2}
 const PeriodicVertex3D = PeriodicVertex{3}
 
+ndims(::PeriodicVertex{N}) where {N} = N
 
-@inline ZtoN(x::Signed) = -(x<0) + 2*abs(x)
+
+@inline ZtoN(x::Signed) = abs(2x + signbit(x)) # abs(bitrotate(x, 1)) # abs((x << 1) | (x >>> 63)) # (abs(x) << 1) - (x<0)
 @inline function hash_position(x::SVector{3,<:Integer})
     @inbounds begin x1 = x[1]; x2 = x[2]; x3 = x[3] end
     x1 = ZtoN(x1); x2 = ZtoN(x2); x3 = ZtoN(x3)
     _b = x1 >= x2
-    b1 = _b & (x1 >= x3)
-    b2 = (!_b) & (x2 >= x3)
-    b3 = (!b1) & (!b2)
+    b1 = _b & (x1 >= x3)    # x1 ≥ x2 and x1 ≥ x3
+    b2 = (!_b) & (x2 >= x3) # x2 > x1 and x2 ≥ x3
+    b3 = (!b1) & (!b2)      # x3 > x1 and x3 > x2
     return b1*(x2*(x1 + 1) + x3 + x1^3) +
            b2*((x2 + 1)*(x1 + x2 + 1) + x3 + x2^3) +
            b3*((x3 + 1)*(2x3 + 1) + x3*(x1 + x3^2) + x2)
@@ -63,8 +65,7 @@ end
 @inline function hash_position(x::SVector{2,<:Integer})
     @inbounds begin x1 = x[1]; x2 = x[2] end
     x1 = ZtoN(x1); x2 = ZtoN(x2)
-    b = x1 >= x2
-    return b*(x2 + x1^2) + (!b)*(x1 + x2*(x2 + 1) + 1)
+    return ifelse(x1 >= x2, x2 + x1^2, x1 + x2*(x2 + 1) + 1)
 end
 
 @inline function hash_position(x::SVector{1,<:Integer})
@@ -73,6 +74,12 @@ end
 
 @inline function hash_position(::SVector{0,<:Integer})
     return 0
+end
+
+@static if Int === Int64
+    for N in 1:3 # accelerated hash computation
+        @eval hash(x::PeriodicVertex{$N}, h::UInt) = hash(x.v << 32 ⊻ hash_position(x.ofs), h)
+    end
 end
 
 """
@@ -91,4 +98,47 @@ distance), all vertices in A will have a larger hash than all vertices in B.
     return x.v + n*hash_position(x.ofs)
 end
 
-ndims(::PeriodicVertex{N}) where {N} = N
+
+
+@inline NtoZ(n) = (((-1)^isodd(n))*n) >> 1
+
+function reverse_hash_position(x::Integer, ::Val{3})
+    x == 0 && return zero(SVector{3,Int})
+    n = floor(Int, cbrt(x))
+    zn = NtoZ(n)
+    n2 = n^2
+    n3 = n*n2
+    y = x - n3
+    if y ≤ 2n+n2
+        x2, x3 = divrem(y, n+1)
+        return SVector{3,Int}(zn, NtoZ(x2), NtoZ(x3))
+    end
+    y -= n2 + 2n + 1
+    if y ≤ n2 - 1 + n
+        x1, x3 = divrem(y, n+1)
+        return SVector{3,Int}(NtoZ(x1), zn, NtoZ(x3))
+    end
+    y -= n2 + n
+    x1, x2 = divrem(y, n)
+    return SVector{3,Int}(NtoZ(x1), NtoZ(x2), zn)
+end
+
+function reverse_hash_position(x::Integer, ::Val{2})
+    x == 0 && return zero(SVector{2,Int})
+    n = floor(Int, sqrt(x))
+    zn = NtoZ(n)
+    n2 = n^2
+    if x ≤ n^2 + n
+        return SVector{2,Int}(zn, NtoZ(x - n2))
+    end
+    return SVector{2,Int}(NtoZ(x - 1 - n2 - n), zn)
+end
+
+reverse_hash_position(x::Integer, ::Val{1}) = SVector{1,Int}(NtoZ(x))
+
+reverse_hash_position(::Integer, ::Val{0}) = SVector{0,Int}()
+
+function reverse_hash_position(hash::Integer, n::Integer, ::Val{N}) where N
+    x, node = fldmod1(hash, n)
+    return PeriodicVertex{N}(node, reverse_hash_position(x-1, Val(N)))
+end
