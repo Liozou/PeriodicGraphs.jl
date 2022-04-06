@@ -1,42 +1,3 @@
-#=
-mutable struct List{T}
-    num::Int
-    root::T
-    head::T
-    tail::List{T}
-
-    List{T}() where {T} = new{T}(0)
-    List(x::T) where {T} = new{T}(1, x, x)
-    List(root::T, head::T) where {T} = new{T}(0, root, head)
-
-    List(x, l::List{T}) where {T} = new{T}(l.num+1, l.root, x, l)
-end
-length(l::List{T}) where {T} = l.num
-eltype(::List{T}) where {T} = T
-
-iterate(l::List{T}) where {T} = l.num == 0 ? nothing : (l.head, l.tail)
-iterate(::List{T}, l::List{T}) where {T} = iterate(l)
-
-function Base.show(io::IO, l::List)
-    print(io, "((")
-    for (i,x) in enumerate(l)
-        print(io, x)
-        i != l.num && print(io, ", ")
-    end
-    print(io, "))")
-end
-
-function collect!(ret, x::List{T}, reverse=false, istart=1) where T
-    y = x
-    for i in (reverse ? ((x.num+istart-1):-1:istart) : (istart:(x.num+istart-1)))
-        ret[i] = y.head
-        y = y.tail
-    end
-    return ret
-end
-Base.collect(x::List{T}) where {T} = collect!(Vector{T}(undef, x.num), x)
-=#
-
 struct ConstMiniBitSet <: AbstractSet{Int}
     x::UInt64
     global _constminibitset(x::UInt64) = new(x)
@@ -71,9 +32,10 @@ Base.iterate(x::ConstMiniBitSet) = iterate(x, x.x)
 Base.isdone(::ConstMiniBitSet, x::UInt64) = iszero(x)
 Base.isdone(x::ConstMiniBitSet) = Base.isdone(x, x.x)
 
-minabove(x::ConstMiniBitSet, i::Integer) = trailing_zeros(x.x & ((~one(UInt64)) << (i % UInt8)))
-minaboveeq(x::ConstMiniBitSet, i::Integer) = trailing_zeros(x.x & ((~zero(UInt64)) << (i % UInt8)))
+# minabove(x::ConstMiniBitSet, i::Integer) = trailing_zeros(x.x & ((~one(UInt64)) << (i % UInt8)))
+# minaboveeq(x::ConstMiniBitSet, i::Integer) = trailing_zeros(x.x & ((~zero(UInt64)) << (i % UInt8)))
 # nonemptyintersect(x::ConstMiniBitSet, y::ConstMiniBitSet) = !iszero(x.x & y.y)
+hasonly(x::ConstMiniBitSet, i::Integer) = iszero(x.x & ~(one(UInt64) << (i % UInt8)))
 
 Base.minimum(x::ConstMiniBitSet) = first(x)
 Base.maximum(x::ConstMiniBitSet) = 64 - leading_zeros(x.x)
@@ -110,11 +72,11 @@ Base.iterate(x::MiniBitSet, u::UInt64=x.x) = iterate(ConstMiniBitSet(), u)
 Base.isdone(::MiniBitSet, x::UInt64) = iszero(x)
 Base.isdone(x::MiniBitSet) = Base.isdone(x, x.x)
 
-minabove(x::MiniBitSet, i::Integer) = minabove(ConstMiniBitSet(x), i)
-minaboveeq(x::MiniBitSet, i::Integer) = minaboveeq(ConstMiniBitSet(x), i)
+# minabove(x::MiniBitSet, i::Integer) = minabove(ConstMiniBitSet(x), i)
+# minaboveeq(x::MiniBitSet, i::Integer) = minaboveeq(ConstMiniBitSet(x), i)
 # isnonemptyintersect(x::MiniBitSet, y::MiniBitSet) = !iszero(x.x & y.x)
 # isnonemptysymdiff(x::MiniBitSet, y::MiniBitSet) = !iszero(x.x ⊻ y.x)
-hasonly(x::MiniBitSet, i::Integer) = iszero(x.x & ~(one(UInt64) << (i % UInt8)))
+# hasonly(x::MiniBitSet, i::Integer) = iszero(x.x & ~(one(UInt64) << (i % UInt8)))
 # hasotherthan(x::MiniBitSet, i::Integer) = !iszero(x.x & ~(one(UInt64) << (i % UInt8)))
 
 Base.length(x::MiniBitSet) = length(ConstMiniBitSet(x))
@@ -131,18 +93,18 @@ end
 
 
 struct JunctionNode
-    heads::Vector{Int}
+    shortroots::ConstMiniBitSet
+    longroots::ConstMiniBitSet
+    lastshort::Int
     num::Int # length of the shortest branch
-    shortroots::MiniBitSet
-    longroots::MiniBitSet
-    lastshort::Base.RefValue{Int}
-    function JunctionNode(heads::AbstractVector, num, roots::MiniBitSet)
-        new(heads, num, roots, MiniBitSet(), Ref(length(heads)))
+    heads::Vector{Int}
+    function JunctionNode(heads::AbstractVector, num, roots::ConstMiniBitSet)
+        new(roots, ConstMiniBitSet(), length(heads), num, heads)
     end
 end
-JunctionNode() = JunctionNode(Int[], -1, MiniBitSet())
-JunctionNode(head::Integer, num, roots::MiniBitSet) = JunctionNode(Int[head], num, roots)
-JunctionNode(root::Integer) = JunctionNode(1, 0, MiniBitSet(root))
+JunctionNode() = JunctionNode(Int[], -1, ConstMiniBitSet())
+JunctionNode(head::Integer, num, roots::ConstMiniBitSet) = JunctionNode(Int[head], num, roots)
+JunctionNode(root::Integer) = JunctionNode(1, 0, ConstMiniBitSet(root))
 
 function Base.show(io::IO, x::JunctionNode)
     print(io, "JunctionNode([")
@@ -150,48 +112,62 @@ function Base.show(io::IO, x::JunctionNode)
     print(io, "])")
 end
 
+const shortrootsoffset = fieldoffset(JunctionNode, findfirst(==(:shortroots), fieldnames(JunctionNode)))
+const longrootsoffset = fieldoffset(JunctionNode, findfirst(==(:longroots), fieldnames(JunctionNode)))
+const lastshortoffset = fieldoffset(JunctionNode, findfirst(==(:lastshort), fieldnames(JunctionNode)))
+
+@inline unsafe_incr!(ptr) = unsafe_store!(ptr, unsafe_load(ptr)+1)
+@inline unsafe_union!(ptr, val) = unsafe_store!(ptr, _constminibitset(val | unsafe_load(ptr).x))
 
 function arcs_list(g::PeriodicGraph{D}, i, depth) where D
-    Q = Tuple{PeriodicVertex{D},JunctionNode}[(PeriodicVertex{D}(i), JunctionNode())]
-    sizehint!(Q, ceil(Int, depth^2.9)) # empirical estimate
-    append!(Q, (x, JunctionNode(j+1)) for (j,x) in enumerate(neighbors(g, i)))
-    if length(Q) > 62
+    vertexnums = PeriodicVertex{D}[PeriodicVertex{D}(i)]
+    dag = JunctionNode[JunctionNode()]
+    hintsize = ceil(Int, depth^2.9) # empirical estimate
+    sizehint!(vertexnums, hintsize)
+    sizehint!(dag, hintsize)
+    append!(vertexnums, neighbors(g, i))
+    if length(vertexnums) > 62
         error("The vertex has a degree too large (> 62) to be represented in a MiniBitSet. Please open an issue.")
     end
-    vertexdict = Dict{PeriodicVertex{D},Int}((x[1] => j) for (j,x) in enumerate(Q))
+    append!(dag, JunctionNode(j) for j in 2:length(vertexnums))
+    vertexdict = Dict{PeriodicVertex{D},Int}((x => j) for (j,x) in enumerate(vertexnums))
     counter = 1
-    for (u, parents) in Iterators.rest(Q, 2)
+    for parents in Iterators.rest(dag, 2)
         parents.num == depth && break
         counter += 1
-        previous = Q[parents.heads[1]][1]
+        previous = vertexnums[parents.heads[1]]
         num = 1 + parents.num
-        for x in neighbors(g, u)
+        for x in neighbors(g, vertexnums[counter])
             x == previous && continue
-            idx = get!(vertexdict, x, length(Q)+1)
-            if idx == length(Q)+1
-                push!(Q, (x, JunctionNode(counter, num, copy(parents.shortroots))))
+            idx = get!(vertexdict, x, length(dag)+1)
+            if idx == length(dag)+1
+                push!(dag, JunctionNode(counter, num, parents.shortroots))
+                push!(vertexnums, x)
             elseif idx > counter
-                junction = Q[idx][2]
+                junction = dag[idx]
                 push!(junction.heads, counter)
+                # We use pointer and unsafe_store! to modify the immutable type JunctionNode
+                # This is only possible because it is stored in a Vector, imposing fixed addresses.
+                ptr = pointer(dag, idx)
                 if num == junction.num
-                    junction.lastshort[] += 1
-                    union!(junction.shortroots, parents.shortroots)
+                    unsafe_incr!(Ptr{Int}(ptr + lastshortoffset))
+                    unsafe_union!(Ptr{ConstMiniBitSet}(ptr + shortrootsoffset), parents.shortroots.x)
                 else
-                    union!(junction.longroots, parents.shortroots)
+                    unsafe_union!(Ptr{ConstMiniBitSet}(ptr + longrootsoffset), parents.shortroots.x)
                 end
             end
         end
     end
-    return Q, vertexdict
+    return dag, vertexnums, vertexdict
 end
 
 
-function next_compatible_arc!(buffer, last_positions, idx_stack, Q, check)
+function next_compatible_arc!(buffer, last_positions, idx_stack, dag, check, dist=nothing, vertexnums=nothing)
     num = length(idx_stack)
     incompatibleflag = true
     updated_last_positions = last_positions
     haslongarc = length(buffer) - 2*num == 3
-    root = buffer[num - haslongarc + 2]
+    root = buffer[num - haslongarc + 2] # undefined if !check
     while incompatibleflag
         trail = trailing_ones(updated_last_positions) % UInt8
         next_toupdate = num - trail
@@ -200,28 +176,32 @@ function next_compatible_arc!(buffer, last_positions, idx_stack, Q, check)
         incompatibleflag = false
         idx = idx_stack[next_toupdate] + 1
         head = buffer[check ? next_toupdate : end-next_toupdate]
-        parents = Q[head][2]
+        parents = dag[head]
         for i in next_toupdate:num
             heads = parents.heads
             head = heads[idx]
             _i = i + 1
-            last_head = parents.lastshort[]
+            last_head = parents.lastshort
             if check
-                next_parents = Q[head][2]
-                while hasonly(next_parents.shortroots, root) || head == buffer[end-_i-haslongarc]
+                next_parents = dag[head]
+                while hasonly(next_parents.shortroots, root) ||
+                      head == buffer[end-_i-haslongarc] ||
+                      (dist !== nothing && # checking for rings instead of cycles
+                      (is_distance_smaller!(dist, vertexnums[buffer[num+_i]], vertexnums[head], num) ||
+                      (haslongarc && is_distance_smaller!(dist, vertexnums[buffer[num+_i+1]], vertexnums[head], num))))
                     if idx == last_head
-                        last_positions |= (~zero(UInt64) >> ((63 - num + i) % UInt8))
+                        updated_last_positions |= (~zero(UInt64) >> ((63 - num + i) % UInt8))
                         incompatibleflag = true
                         break
                     end
                     idx += 1
                     head = heads[idx]
-                    next_parents = Q[head][2]
+                    next_parents = dag[head]
                 end
                 incompatibleflag && break
                 parents = next_parents
             else
-                parents = Q[head][2]
+                parents = dag[head]
             end
             buffer[check ? _i : end-_i] = head
             idx_stack[i] = idx
@@ -234,33 +214,37 @@ function next_compatible_arc!(buffer, last_positions, idx_stack, Q, check)
     return updated_last_positions
 end
 
-function initial_compatible_arc!(buffer, idx_stack, Q, check)
+function initial_compatible_arc!(buffer, idx_stack, dag, check, dist=nothing, vertexnums=nothing)
     last_positions = zero(UInt64)
     num = length(idx_stack)
     head = buffer[check ? 1 : end-1]
     haslongarc = length(buffer) - 2*num == 3
-    root = buffer[num - haslongarc + 2]
-    parents = Q[head][2]
+    root = check ? 0 : buffer[num - haslongarc + 2] # unused if !check
+    parents = dag[head]
     for i in 1:num
         heads = parents.heads
         head = heads[1]
         _i = i + 1
         idx = 1
-        last_head = parents.lastshort[]
+        last_head = parents.lastshort
         if check
-            next_parents = Q[head][2]
-            while hasonly(next_parents.shortroots, root) || head == buffer[end-_i-haslongarc]
+            next_parents = dag[head]
+            while hasonly(next_parents.shortroots, root) ||
+                  head == buffer[end-_i-haslongarc] ||
+                  (dist !== nothing && # checking for rings instead of cycles
+                  (is_distance_smaller!(dist, vertexnums[buffer[num+_i]], vertexnums[head], num) ||
+                  (haslongarc && is_distance_smaller!(dist, vertexnums[buffer[num+_i+1]], vertexnums[head], num))))
                 if idx == last_head
                     last_positions |= (~zero(UInt64) >> ((63 - num + i) % UInt8))
-                    return next_compatible_arc!(buffer, last_positions, idx_stack, Q, true)
+                    return next_compatible_arc!(buffer, last_positions, idx_stack, dag, true)
                 end
                 idx += 1
                 head = heads[idx]
-                next_parents = Q[head][2]
+                next_parents = dag[head]
             end
             parents = next_parents
         else
-            parents = Q[head][2]
+            parents = dag[head]
         end
         idx_stack[i] = idx
         buffer[check ? _i : end-_i] = head
@@ -271,70 +255,306 @@ function initial_compatible_arc!(buffer, idx_stack, Q, check)
     return last_positions
 end
 
-function _case_0(heads, lastshort, i_stop)
-    return Vector{Int}[Int[1, heads[i], i_stop] for i in length(heads):-1:(lastshort+1)]
+function _case_0(heads, lastshort, midnode)
+    return Vector{Int}[Int[1, heads[i], midnode] for i in length(heads):-1:(lastshort+1)]
 end
 
-function cycles_ending_at(Q::Vector{Tuple{PeriodicVertex{D},JunctionNode}}, i_stop) where D
-    parents = Q[i_stop][2]
-    length(parents.heads) ≥ 2 || return Vector{Int}[]
-    length(union(ConstMiniBitSet(parents.shortroots), ConstMiniBitSet(parents.longroots))) ≥ 2 || return Vector{Int}[]
+function _iterate_case_0(heads, lastshort, midnode, i)
+    i ≤ lastshort && return nothing
+    return (Int[1, heads[i], midnode], (Int[], Int[], i-1))
+end
+struct CyclesMidnode
+    dag::Vector{JunctionNode}
+    midnode::Int
+end
+Base.eltype(::CyclesMidnode) = Vector{Int}
+Base.IteratorSize(::CyclesMidnode) = Base.SizeUnknown()
+#=
+function Base.iterate(x::CyclesMidnode)
+    dag = x.dag
+    midnode = x.midnode
+    parents = dag[midnode]
+    length(parents.heads) ≥ 2 || return nothing
+    length(union(parents.shortroots, parents.longroots)) ≥ 2 || return nothing
     shortest_n = parents.num
-    parents_lastshort = parents.lastshort[]
-    shortest_n == 0 && return _case_0(parents.heads, parents_lastshort, i_stop)
+    parents_lastshort = parents.lastshort
+    shortest_n == 0 && return _iterate_case_0(parents.heads, parents_lastshort, midnode, length(parents.heads))
+    idx_stack1 = Vector{Int}(undef, shortest_n)
+    idx_stack2 = Vector{Int}(undef, shortest_n-1)
+    buffer = Vector{Int}(undef, 2*shortest_n + 3)
+    buffer[shortest_n+1] = 1
+    buffer[end] = midnode
+    for i1 in length(parents.heads):-1:2
+        if i1 == parents_lastshort
+            Base._deleteend!(buffer, 1)
+            Base._deleteend!(idx_stack1, 1)
+            buffer[end] = midnode
+        end
+        buffer[end-1] = parents.heads[i1]
+        last_positions1 = initial_compatible_arc!(buffer, idx_stack1, dag, false)
+        while last_positions1 != ~zero(UInt64)
+            for i2 in 1:min(i1-1, parents_lastshort)
+                head2 = parents.heads[i2]
+                i1 > parents_lastshort && buffer[end-2] == head2 && continue # 3-cycle near midnode
+                buffer[1] = head2
+                last_positions2 = initial_compatible_arc!(buffer, idx_stack2, dag, true)
+                if last_positions2 != ~zero(UInt64)
+                    return (buffer, (buffer, idx_stack1, idx_stack2, i1, last_positions1, i2, last_positions2))
+                end
+            end
+            last_positions1 = next_compatible_arc!(buffer, last_positions1, idx_stack1, dag, false)
+        end
+    end
+    return nothing
+end
+
+function Base.iterate(x::CyclesMidnode, (buffer, idx_stack1, idx_stack2, _i1, last_positions1, _i2, _last_positions2))
+    dag = x.dag
+    _last_positions2 = next_compatible_arc!(buffer, _last_positions2, idx_stack2, dag, true)
+    if _last_positions2 != ~zero(UInt64)
+        return (buffer, (buffer, idx_stack1, idx_stack2, _i1, last_positions1, _i2, _last_positions2))
+    end
+    midnode = x.midnode
+    parents = dag[midnode]
+    parents_lastshort = parents.lastshort
+    while last_positions1 != ~zero(UInt64)
+        for i2 in _i2+1:min(_i1-1, parents_lastshort)
+            head2 = parents.heads[i2]
+            _i1 > parents_lastshort && buffer[end-2] == head2 && continue # 3-cycle near midnode
+            buffer[1] = head2
+            last_positions2 = initial_compatible_arc!(buffer, idx_stack2, dag, true)
+            if last_positions2 != ~zero(UInt64)
+                return (buffer, (buffer, idx_stack1, idx_stack2, _i1, last_positions1, i2, last_positions2))
+            end
+        end
+        last_positions1 = next_compatible_arc!(buffer, last_positions1, idx_stack1, dag, false)
+    end
+    for i1 in _i1-1:-1:2
+        if i1 == parents_lastshort
+            Base._deleteend!(buffer, 1)
+            Base._deleteend!(idx_stack1, 1)
+            buffer[end] = midnode
+        end
+        buffer[end-1] = parents.heads[i1]
+        last_positions1 = initial_compatible_arc!(buffer, idx_stack1, dag, false)
+        while last_positions1 != ~zero(UInt64)
+            for i2 in 1:min(i1-1, parents_lastshort)
+                head2 = parents.heads[i2]
+                i1 > parents_lastshort && buffer[end-2] == head2 && continue # 3-cycle near midnode
+                buffer[1] = head2
+                last_positions2 = initial_compatible_arc!(buffer, idx_stack2, dag, true)
+                if last_positions2 != ~zero(UInt64)
+                    return (buffer, (buffer, idx_stack1, idx_stack2, i1, last_positions1, i2, last_positions2))
+                end
+            end
+            last_positions1 = next_compatible_arc!(buffer, last_positions1, idx_stack1, dag, false)
+        end
+    end
+    return nothing
+end=#
+
+function cycles_ending_at(dag::Vector{JunctionNode}, midnode, args...)
+    parents = dag[midnode]
+    length(parents.heads) ≥ 2 || return Vector{Int}[]
+    length(union(parents.shortroots, parents.longroots)) ≥ 2 || return Vector{Int}[]
+    shortest_n = parents.num
+    parents_lastshort = parents.lastshort
+    shortest_n == 0 && return _case_0(parents.heads, parents_lastshort, midnode)
     ret = Vector{Int}[]
     idx_stack1 = Vector{Int}(undef, shortest_n)
     idx_stack2 = Vector{Int}(undef, shortest_n-1)
     buffer = Vector{Int}(undef, 2*shortest_n + 3)
     buffer[shortest_n+1] = 1
-    buffer[end] = i_stop
+    buffer[end] = midnode
     for i1 in length(parents.heads):-1:2
         if i1 == parents_lastshort
             Base._deleteend!(buffer, 1)
             Base._deleteend!(idx_stack1, 1)
-            buffer[end] = i_stop
+            buffer[end] = midnode
         end
         buffer[end-1] = parents.heads[i1]
-        last_positions1 = initial_compatible_arc!(buffer, idx_stack1, Q, false)
+        last_positions1 = initial_compatible_arc!(buffer, idx_stack1, dag, false, args...)
         while last_positions1 != ~zero(UInt64)
             for i2 in 1:min(i1-1, parents_lastshort)
                 head2 = parents.heads[i2]
-                i1 > parents_lastshort && buffer[end-2] == head2 && continue # 3-cycle near i_stop
+                i1 > parents_lastshort && buffer[end-2] == head2 && continue # 3-cycle near midnode
                 buffer[1] = head2
-                last_positions2 = initial_compatible_arc!(buffer, idx_stack2, Q, true)
+                last_positions2 = initial_compatible_arc!(buffer, idx_stack2, dag, true, args...)
                 while last_positions2 != ~zero(UInt64)
                     push!(ret, copy(buffer))
-                    last_positions2 = next_compatible_arc!(buffer, last_positions2, idx_stack2, Q, true)
+                    last_positions2 = next_compatible_arc!(buffer, last_positions2, idx_stack2, dag, true, args...)
                 end
             end
-            last_positions1 = next_compatible_arc!(buffer, last_positions1, idx_stack1, Q, false)
+            last_positions1 = next_compatible_arc!(buffer, last_positions1, idx_stack1, dag, false, args...)
         end
     end
     return ret
 end
 
 
-#=
-function cycles_around(g, node, depth)
-    Q, vertexdict = arcs_list(g, node, depth)
-    cycles = Vector{PeriodicVertex3D}[]
-    for (k, (x, arcs)) in enumerate(Q)
-        length(arcs) ≤ 1 && continue
-        len = arcs[1].num
-        for (i1, arc1) in enumerate(arcs)
-            (arc1.num > len || i1 == length(arcs)) && break
-            arc1list = Vector{PeriodicVertex{D}}(undef, length(arc1) + 1)
-            arc1list[1] = PeriodicVertex{D}(node)
-            collect!(arc1list, arc1, true, 2)
-            root = arc1.root
-            for i2 in (i1+1):length(arcs)
-                arc2 = arcs[i2]
-                arc2.root == root && continue
-            end
+"""
+    DistanceRecord{D}
+
+Record of the computed distances between vertices of a graph.
+"""
+struct DistanceRecord{D}
+    g::PeriodicGraph{D}
+    distances::Dict{Tuple{Int,Int},Int}
+    Q_lists::Vector{Vector{Tuple{PeriodicVertex{D},Int}}}
+    first_indices::Vector{Int}
+    seens::Vector{Set{Int}}
+end
+function DistanceRecord(g::PeriodicGraph{D}) where D
+    distances = Dict{Tuple{Int,Int},Int}()
+    n = nv(g)
+    Q_lists = Vector{Vector{Tuple{PeriodicVertex{D},Int}}}(undef, n)
+    first_indices = zeros(Int, n)
+    seens = Vector{Set{Int}}(undef, n)
+    return DistanceRecord{D}(g, distances, Q_lists, first_indices, seens)
+end
+
+function known_distance(dist::DistanceRecord, i, j)
+    get(dist.distances, minmax(i,j), 0)
+end
+function set_distance!(dist::DistanceRecord, i, j, d)
+    dist.distances[minmax(i,j)] = d
+end
+
+function bfs_smaller!(dist, i, j, start, stop)
+    Q = dist.Q_lists[i]
+    seen = dist.seens[i]
+    graph = dist.g
+    counter = start
+    encountered = false
+    n = nv(graph)
+    for (u, d) in Iterators.rest(Q, start)
+        (encountered || d+1 ≥ stop) && break
+        counter += 1
+        for x in neighbors(graph, u)
+            h = hash_position(x, n)
+            h ∈ seen && continue
+            push!(seen, h)
+            push!(Q, (x, d+1))
+            set_distance!(dist, i, h, d+1)
+            encountered |= h == j
         end
     end
+    dist.first_indices[i] = counter
+    if !encountered
+        set_distance!(dist, i, j, stop)
+        return false
+    end
+    return true
 end
-=#
+
+function _reorderinit(first_indices, verti, vertj::PeriodicVertex{D}) where D
+    n = length(first_indices)
+    counterij = (first_indices[verti.v], first_indices[vertj.v])
+    if counterij[1] < counterij[2]
+        return vertj.v, hash_position(PeriodicVertex{D}(verti.v, verti.ofs .- vertj.ofs), n), counterij[2]
+    end
+    return verti.v, hash_position(PeriodicVertex{D}(vertj.v, vertj.ofs .- verti.ofs), n), counterij[1]
+end
+
+function init_distance_record!(dist, i, j)
+    dist.first_indices[i] = 1
+    g = dist.g
+    dist.Q_lists[i] = [(x, 1) for x in neighbors(g, i)]
+    _seen = Set{Int}(i)
+    encountered = false
+    n = nv(g)
+    for x in neighbors(g, i)
+        _h = hash_position(x, n)
+        set_distance!(dist, i, _h, 1)
+        push!(_seen, _h)
+        encountered |= _h == j
+    end
+    dist.seens[i] = _seen
+    encountered
+end
+
+function is_distance_smaller!(dist, verti, vertj, stop)
+    i, j, start = _reorderinit(dist.first_indices, verti, vertj)
+    known = known_distance(dist, i, j)
+    known == 0 || return known < stop
+    if start == 0
+        init_distance_record!(dist, i, j) && return 1 < stop
+        start = 1
+    end
+    return bfs_smaller!(dist, i, j, start, stop)
+end
+
+
+function rings_around_old(g::PeriodicGraph{D}, i, depth=20) where D
+    n = nv(g)
+    dist = DistanceRecord(g)
+    dag, vertexnums, _ = arcs_list(g, i, depth)
+    hashes = [hash_position(x, n) for x in vertexnums]
+    ret = Vector{Int}[]
+    for midnode in 2:length(dag)
+        for cycle in cycles_ending_at(dag, midnode, dist, vertexnums)
+            invalidcycle = false
+            lenc = length(cycle)
+            num = lenc ÷ 2
+            if isodd(lenc)
+                for i in 1:(num-1)
+                    verti = vertexnums[cycle[i]]
+                    vertj1 = vertexnums[cycle[num+i]]
+                    vertj2 = vertexnums[cycle[num+i+1]]
+                    if is_distance_smaller!(dist, verti, vertj1, num) ||
+                       is_distance_smaller!(dist, verti, vertj2, num)
+                        invalidcycle = true
+                        break
+                    end
+                end
+            else
+                for i in 1:(num-1)
+                    verti = vertexnums[cycle[i]]
+                    vertj = vertexnums[cycle[num+i]]
+                    if is_distance_smaller!(dist, verti, vertj, num)
+                        invalidcycle = true
+                        break
+                    end
+                end
+            end
+            invalidcycle && continue
+            hashcycle = hashes[cycle]
+            fst = argmin(hashcycle)
+            endreverse = hashcycle[mod1(fst+1, lenc)] < hashcycle[mod1(fst-1, lenc)]
+            if fst != 1 || !endreverse
+                reverse!(hashcycle, 1, fst - endreverse)
+                reverse!(hashcycle, fst - endreverse + 1, lenc)
+                endreverse && reverse!(hashcycle)
+            end
+            push!(ret, hashcycle)
+        end
+    end
+    return ret
+end
+
+
+function rings_around(g::PeriodicGraph{D}, i, depth=20) where D
+    n = nv(g)
+    dist = DistanceRecord(g)
+    dag, vertexnums, _ = arcs_list(g, i, depth)
+    hashes = [hash_position(x, n) for x in vertexnums]
+    ret = Vector{Int}[]
+    for midnode in 2:length(dag)
+        for cycle in cycles_ending_at(dag, midnode, dist, vertexnums)
+            hashcycle = hashes[cycle]
+            fst = argmin(hashcycle)
+            lenc = length(cycle)
+            endreverse = hashcycle[mod1(fst+1, lenc)] < hashcycle[mod1(fst-1, lenc)]
+            if fst != 1 || !endreverse
+                reverse!(hashcycle, 1, fst - endreverse)
+                reverse!(hashcycle, fst - endreverse + 1, lenc)
+                endreverse && reverse!(hashcycle)
+            end
+            push!(ret, hashcycle)
+        end
+    end
+    return ret, dist
+end
 
 
 function simple_bfs(g::PeriodicGraph{D}, i, depth, vertexdict, previous=nothing) where D
