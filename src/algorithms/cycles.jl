@@ -162,22 +162,25 @@ function arcs_list(g::PeriodicGraph{D}, i, depth) where D
 end
 
 
-function next_compatible_arc!(buffer, last_positions, idx_stack, dag, check, dist=nothing, vertexnums=nothing)
-    num = length(idx_stack)
+function next_compatible_arc!(buffer, last_positions, idx_stack, dag, check, dist, vertexnums)
+    num_choice = length(idx_stack)
     incompatibleflag = true
     updated_last_positions = last_positions
-    haslongarc = length(buffer) - 2*num == 3
-    root = buffer[num - haslongarc + 2] # undefined if !check
+    haslongarc = isodd(length(buffer))
+    num = num_choice + 2 - haslongarc
+    @assert buffer[num] == 1
+    @assert num == length(buffer) ÷ 2
+    root = buffer[num+1] # unused if !check
     while incompatibleflag
         trail = trailing_ones(updated_last_positions) % UInt8
-        next_toupdate = num - trail
+        next_toupdate = num_choice - trail
         next_toupdate < 1 && return ~zero(UInt64)
         updated_last_positions = updated_last_positions & (~zero(UInt64) << trail)
         incompatibleflag = false
         idx = idx_stack[next_toupdate] + 1
         head = buffer[check ? next_toupdate : end-next_toupdate]
         parents = dag[head]
-        for i in next_toupdate:num
+        for i in next_toupdate:num_choice
             heads = parents.heads
             head = heads[idx]
             _i = i + 1
@@ -190,7 +193,7 @@ function next_compatible_arc!(buffer, last_positions, idx_stack, dag, check, dis
                       (is_distance_smaller!(dist, vertexnums[buffer[num+_i]], vertexnums[head], num) ||
                       (haslongarc && is_distance_smaller!(dist, vertexnums[buffer[num+_i+1]], vertexnums[head], num))))
                     if idx == last_head
-                        updated_last_positions |= (~zero(UInt64) >> ((63 - num + i) % UInt8))
+                        updated_last_positions |= (~zero(UInt64) >> ((63 - num_choice + i) % UInt8))
                         incompatibleflag = true
                         break
                     end
@@ -206,7 +209,7 @@ function next_compatible_arc!(buffer, last_positions, idx_stack, dag, check, dis
             buffer[check ? _i : end-_i] = head
             idx_stack[i] = idx
             if idx == last_head
-                updated_last_positions |= (one(UInt64) << ((num - i) % UInt8))
+                updated_last_positions |= (one(UInt64) << ((num_choice - i) % UInt8))
             end
             idx = 1
         end
@@ -214,14 +217,17 @@ function next_compatible_arc!(buffer, last_positions, idx_stack, dag, check, dis
     return updated_last_positions
 end
 
-function initial_compatible_arc!(buffer, idx_stack, dag, check, dist=nothing, vertexnums=nothing)
+function initial_compatible_arc!(buffer, idx_stack, dag, check, dist, vertexnums)
     last_positions = zero(UInt64)
-    num = length(idx_stack)
+    num_choice = length(idx_stack)
     head = buffer[check ? 1 : end-1]
-    haslongarc = length(buffer) - 2*num == 3
-    root = check ? 0 : buffer[num - haslongarc + 2] # unused if !check
+    haslongarc = isodd(length(buffer))
+    num = num_choice + 2 - haslongarc
+    @assert buffer[num] == 1
+    @assert num == length(buffer) ÷ 2
+    root = buffer[num+1] # unused if !check
     parents = dag[head]
-    for i in 1:num
+    for i in 1:num_choice
         heads = parents.heads
         head = heads[1]
         _i = i + 1
@@ -235,8 +241,8 @@ function initial_compatible_arc!(buffer, idx_stack, dag, check, dist=nothing, ve
                   (is_distance_smaller!(dist, vertexnums[buffer[num+_i]], vertexnums[head], num) ||
                   (haslongarc && is_distance_smaller!(dist, vertexnums[buffer[num+_i+1]], vertexnums[head], num))))
                 if idx == last_head
-                    last_positions |= (~zero(UInt64) >> ((63 - num + i) % UInt8))
-                    return next_compatible_arc!(buffer, last_positions, idx_stack, dag, true)
+                    last_positions |= (~zero(UInt64) >> ((63 - num_choice + i) % UInt8))
+                    return next_compatible_arc!(buffer, last_positions, idx_stack, dag, true, dist, vertexnums)
                 end
                 idx += 1
                 head = heads[idx]
@@ -249,7 +255,7 @@ function initial_compatible_arc!(buffer, idx_stack, dag, check, dist=nothing, ve
         idx_stack[i] = idx
         buffer[check ? _i : end-_i] = head
         if idx == last_head
-            last_positions |= (one(UInt64) << ((num-i) % UInt8))
+            last_positions |= (one(UInt64) << ((num_choice-i) % UInt8))
         end
     end
     return last_positions
@@ -259,101 +265,7 @@ function _case_0(heads, lastshort, midnode)
     return Vector{Int}[Int[1, heads[i], midnode] for i in length(heads):-1:(lastshort+1)]
 end
 
-function _iterate_case_0(heads, lastshort, midnode, i)
-    i ≤ lastshort && return nothing
-    return (Int[1, heads[i], midnode], (Int[], Int[], i-1))
-end
-struct CyclesMidnode
-    dag::Vector{JunctionNode}
-    midnode::Int
-end
-Base.eltype(::CyclesMidnode) = Vector{Int}
-Base.IteratorSize(::CyclesMidnode) = Base.SizeUnknown()
-#=
-function Base.iterate(x::CyclesMidnode)
-    dag = x.dag
-    midnode = x.midnode
-    parents = dag[midnode]
-    length(parents.heads) ≥ 2 || return nothing
-    length(union(parents.shortroots, parents.longroots)) ≥ 2 || return nothing
-    shortest_n = parents.num
-    parents_lastshort = parents.lastshort
-    shortest_n == 0 && return _iterate_case_0(parents.heads, parents_lastshort, midnode, length(parents.heads))
-    idx_stack1 = Vector{Int}(undef, shortest_n)
-    idx_stack2 = Vector{Int}(undef, shortest_n-1)
-    buffer = Vector{Int}(undef, 2*shortest_n + 3)
-    buffer[shortest_n+1] = 1
-    buffer[end] = midnode
-    for i1 in length(parents.heads):-1:2
-        if i1 == parents_lastshort
-            Base._deleteend!(buffer, 1)
-            Base._deleteend!(idx_stack1, 1)
-            buffer[end] = midnode
-        end
-        buffer[end-1] = parents.heads[i1]
-        last_positions1 = initial_compatible_arc!(buffer, idx_stack1, dag, false)
-        while last_positions1 != ~zero(UInt64)
-            for i2 in 1:min(i1-1, parents_lastshort)
-                head2 = parents.heads[i2]
-                i1 > parents_lastshort && buffer[end-2] == head2 && continue # 3-cycle near midnode
-                buffer[1] = head2
-                last_positions2 = initial_compatible_arc!(buffer, idx_stack2, dag, true)
-                if last_positions2 != ~zero(UInt64)
-                    return (buffer, (buffer, idx_stack1, idx_stack2, i1, last_positions1, i2, last_positions2))
-                end
-            end
-            last_positions1 = next_compatible_arc!(buffer, last_positions1, idx_stack1, dag, false)
-        end
-    end
-    return nothing
-end
-
-function Base.iterate(x::CyclesMidnode, (buffer, idx_stack1, idx_stack2, _i1, last_positions1, _i2, _last_positions2))
-    dag = x.dag
-    _last_positions2 = next_compatible_arc!(buffer, _last_positions2, idx_stack2, dag, true)
-    if _last_positions2 != ~zero(UInt64)
-        return (buffer, (buffer, idx_stack1, idx_stack2, _i1, last_positions1, _i2, _last_positions2))
-    end
-    midnode = x.midnode
-    parents = dag[midnode]
-    parents_lastshort = parents.lastshort
-    while last_positions1 != ~zero(UInt64)
-        for i2 in _i2+1:min(_i1-1, parents_lastshort)
-            head2 = parents.heads[i2]
-            _i1 > parents_lastshort && buffer[end-2] == head2 && continue # 3-cycle near midnode
-            buffer[1] = head2
-            last_positions2 = initial_compatible_arc!(buffer, idx_stack2, dag, true)
-            if last_positions2 != ~zero(UInt64)
-                return (buffer, (buffer, idx_stack1, idx_stack2, _i1, last_positions1, i2, last_positions2))
-            end
-        end
-        last_positions1 = next_compatible_arc!(buffer, last_positions1, idx_stack1, dag, false)
-    end
-    for i1 in _i1-1:-1:2
-        if i1 == parents_lastshort
-            Base._deleteend!(buffer, 1)
-            Base._deleteend!(idx_stack1, 1)
-            buffer[end] = midnode
-        end
-        buffer[end-1] = parents.heads[i1]
-        last_positions1 = initial_compatible_arc!(buffer, idx_stack1, dag, false)
-        while last_positions1 != ~zero(UInt64)
-            for i2 in 1:min(i1-1, parents_lastshort)
-                head2 = parents.heads[i2]
-                i1 > parents_lastshort && buffer[end-2] == head2 && continue # 3-cycle near midnode
-                buffer[1] = head2
-                last_positions2 = initial_compatible_arc!(buffer, idx_stack2, dag, true)
-                if last_positions2 != ~zero(UInt64)
-                    return (buffer, (buffer, idx_stack1, idx_stack2, i1, last_positions1, i2, last_positions2))
-                end
-            end
-            last_positions1 = next_compatible_arc!(buffer, last_positions1, idx_stack1, dag, false)
-        end
-    end
-    return nothing
-end=#
-
-function cycles_ending_at(dag::Vector{JunctionNode}, midnode, args...)
+function cycles_ending_at(dag::Vector{JunctionNode}, midnode, dist=nothing, vertexnums=nothing)
     parents = dag[midnode]
     length(parents.heads) ≥ 2 || return Vector{Int}[]
     length(union(parents.shortroots, parents.longroots)) ≥ 2 || return Vector{Int}[]
@@ -373,19 +285,28 @@ function cycles_ending_at(dag::Vector{JunctionNode}, midnode, args...)
             buffer[end] = midnode
         end
         buffer[end-1] = parents.heads[i1]
-        last_positions1 = initial_compatible_arc!(buffer, idx_stack1, dag, false, args...)
+        last_positions1 = initial_compatible_arc!(buffer, idx_stack1, dag, false, dist, vertexnums)
         while last_positions1 != ~zero(UInt64)
             for i2 in 1:min(i1-1, parents_lastshort)
                 head2 = parents.heads[i2]
                 i1 > parents_lastshort && buffer[end-2] == head2 && continue # 3-cycle near midnode
                 buffer[1] = head2
-                last_positions2 = initial_compatible_arc!(buffer, idx_stack2, dag, true, args...)
+                if dist !== nothing && # checking for rings instead of cycles
+                  (is_distance_smaller!(dist, vertexnums[buffer[shortest_n+2]], vertexnums[head2], shortest_n+1) ||
+                  (i1 > parents_lastshort && is_distance_smaller!(dist, vertexnums[buffer[shortest_n+3]], vertexnums[head2], shortest_n+1)))
+                    continue
+                end
+                last_positions2 = initial_compatible_arc!(buffer, idx_stack2, dag, true, dist, vertexnums)
                 while last_positions2 != ~zero(UInt64)
+                    # if buffer[shortest_n+1:end] == [1, 4, 12, 24]
+                    #     @show getindex.((args[2],), buffer)
+                    #     @show buffer
+                    # end
                     push!(ret, copy(buffer))
-                    last_positions2 = next_compatible_arc!(buffer, last_positions2, idx_stack2, dag, true, args...)
+                    last_positions2 = next_compatible_arc!(buffer, last_positions2, idx_stack2, dag, true, dist, vertexnums)
                 end
             end
-            last_positions1 = next_compatible_arc!(buffer, last_positions1, idx_stack1, dag, false, args...)
+            last_positions1 = next_compatible_arc!(buffer, last_positions1, idx_stack1, dag, false, dist, vertexnums)
         end
     end
     return ret
@@ -441,7 +362,7 @@ function bfs_smaller!(dist, i, j, start, stop)
     end
     dist.first_indices[i] = counter
     if !encountered
-        set_distance!(dist, i, j, stop)
+        # set_distance!(dist, i, j, stop)
         return false
     end
     return true
@@ -492,7 +413,7 @@ function rings_around_old(g::PeriodicGraph{D}, i, depth=20) where D
     hashes = [hash_position(x, n) for x in vertexnums]
     ret = Vector{Int}[]
     for midnode in 2:length(dag)
-        for cycle in cycles_ending_at(dag, midnode, dist, vertexnums)
+        for cycle in cycles_ending_at(dag, midnode)#, dist, vertexnums)
             invalidcycle = false
             lenc = length(cycle)
             num = lenc ÷ 2
@@ -553,7 +474,7 @@ function rings_around(g::PeriodicGraph{D}, i, depth=20) where D
             push!(ret, hashcycle)
         end
     end
-    return ret, dist
+    return ret
 end
 
 
