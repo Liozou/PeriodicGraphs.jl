@@ -110,13 +110,15 @@ struct JunctionNode
 end
 JunctionNode() = JunctionNode(Int[], -one(SmallIntType), ConstMiniBitSet{UInt32}())
 JunctionNode(head::Integer, num, roots::ConstMiniBitSet) = JunctionNode(Int[head], num, roots)
-function JunctionNode(root::Integer, skip::Bool)
-    if skip
-        JunctionNode(Int[], root, ConstMiniBitSet{UInt32}())
-    else
-        JunctionNode(1, zero(SmallIntType), ConstMiniBitSet{UInt32}(root))
-    end
-end
+JunctionNode(num::Integer, ::Nothing) = JunctionNode(Int[], num, ConstMiniBitSet{UInt32}())
+JunctionNode(root::Integer) = JunctionNode(1, zero(SmallIntType), ConstMiniBitSet{UInt32}(root))
+# function JunctionNode(root::Integer, skip::Bool)
+#     if skip
+#         JunctionNode(Int[], root, ConstMiniBitSet{UInt32}())
+#     else
+#         JunctionNode(1, zero(SmallIntType), ConstMiniBitSet{UInt32}(root))
+#     end
+# end
 
 function Base.show(io::IO, x::JunctionNode)
     print(io, "JunctionNode([")
@@ -124,43 +126,38 @@ function Base.show(io::IO, x::JunctionNode)
     print(io, "])")
 end
 
-
-function prepare_avoid!(dag, vertexnums, g, i, hintsize)
-    neighs = neighbors(g, i)
-    n = length(neighs) + 1
-    todelete = falses(n)
-    finaldagoffset = zeros(Int, n)
-    sizehint!(finaldagoffset, hintsize)
-    finaldagoffset[1] = 1
-    offsetcounter = 1
-    next_toavoid = n + 1
-    resize!(dag, n)
-    resize!(vertexnums, n)
-    #=@inbounds=# for j in 1:n-1
-        x = neighs[j]
-        if iszero(x.ofs) && avoid[x.v]
-            next_toavoid -= 1
-            dag[next_toavoid] = JunctionNode(zero(SmallIntType), true)
-            todelete[next_toavoid] = true
-            vertexnums[next_toavoid] = x
-        else
-            offsetcounter += 1
-            dag[offsetcounter] = JunctionNode(offsetcounter, false)
-            finaldagoffset[offsetcounter] = offsetcounter
-            vertexnums[offsetcounter] = x
-        end
-    end
-    return todelete, finaldagoffset, offsetcounter, next_toavoid
+struct PhantomJunctionNode{D}
+    self::PeriodicVertex{D}
+    parent::PeriodicVertex{D}
+    num::SmallIntType
 end
 
-function update_offsets!(dag, finaldagoffset, start, val)
-    val == 0 && return nothing
-    #=@inbounds=# for j in start:length(dag)
-        finaldagoffset[j] -= val
-        heads = dag[j].heads
-        for (i, h) in enumerate(heads)
-            if h ≥ start
-                heads[i] = h - val
+function prepare_phantomdag!(dag, vertexnums, vertexdict, g::PeriodicGraph{D}, i, avoid, cycleavoid) where D
+    phantomdag = PhantomJunctionNode{D}[]
+    for x in neighbors(g, i)
+        !(cycleavoid isa Nothing) && cycleavoid[x.v] && iszero(x.ofs) && continue
+        if avoid[x.v] && iszero(x.ofs)
+            push!(phantomdag, PhantomJunctionNode(x, PeriodicVertex{D}(i), zero(SmallIntType)))
+            vertexdict[x] = -length(phantomdag)
+        else
+            push!(vertexnums, x)
+            push!(dag, JunctionNode(length(vertexnums)))
+        end
+    end
+    return phantomdag
+end
+
+function handle_phantomdag!(phantomdag, vertexdict, g, last_stop, next_stop)
+    counter = last_stop-1
+    for node in Iterators.rest(phantomdag, last_stop)
+        counter += 1
+        counter == next_stop && return
+        num = node.num + one(SmallIntType)
+        for x in neighbors(g, node.self)
+            x == node.parent && continue
+            idx = get!(vertexdict, x, -length(phantomdag)-1)
+            if idx == -length(phantomdag)-1
+                push!(phantomdag, PhantomJunctionNode(x, node.self, num))
             end
         end
     end
@@ -174,100 +171,137 @@ const lastshortoffset = fieldoffset(JunctionNode, findfirst(==(:lastshort), fiel
 @inline unsafe_union!(ptr, val) = unsafe_store!(ptr, _constminibitset(val | unsafe_load(ptr).x))
 
 """
-    arcs_list(g::PeriodicGraph{D}, i, depth, avoid)
+    arcs_list(g::PeriodicGraph{D}, i, depth, ringavoid=nothing, cycleavoid=nothing)
 
-Compute the list of shortest arcs starting from vertex `i` up to length `depth+1` that do
-not pass through a vertex in `avoid`.
-
-`avoid` can be set to `nothing` to disregard that condition.
+Compute the list of shortest arcs starting from vertex `i` up to length `depth+1`.
+Vertices in `ringavoid` are not included in the returned arcs, but considered still part of
+the graph for distance computations.
+Vertices in `cycleavoid` are considered removed from the graph completely.
 
 Return `(dag, vertexnums)` where `dag` is a `Vector{JunctionNode}` representing, for each
 visited node, the dag of all arcs from that node back to `i`, in a compact representation.
 `vertexnums` is a `Vector{PeriodicVertex{D}}` whose `k`-th value is the vertex represented
 by number `k` in the `dag`.
 """
-function arcs_list(g::PeriodicGraph{D}, i, depth, avoid) where D
-    vertexnums = PeriodicVertex{D}[PeriodicVertex{D}(i)]
+function arcs_list(g::PeriodicGraph{D}, i, depth, ringavoid=nothing, cycleavoid=nothing) where D
     dag = JunctionNode[JunctionNode()]
+    vertexnums = PeriodicVertex{D}[PeriodicVertex{D}(i)]
+    vertexdict = Dict{PeriodicVertex{D},Int}()
     hintsize = ceil(Int, depth^2.9) # empirical estimate
     sizehint!(vertexnums, hintsize)
     sizehint!(dag, hintsize)
+    sizehint!(vertexdict, hintsize)
     if length(vertexnums) > 62
         error("The vertex has a degree too large (> 62) to be represented in a MiniBitSet. Please open an issue.")
     end
-    hasavoid = !(avoid isa Nothing)
-    #= TODO: redo logic for hasavoid:
-    - when handling nodes at distance `num`, `dag` contains valid nodes, then dead nodes,
-      then nodes at distance `num+1`
+    hasavoid = !(ringavoid isa Nothing)
+    #= Logic with hasavoid:
+    A node `x` is considered dead when they `avoid[x] == true`. Moreover, any node at
+    distance `num` from `i` that cannot be reached from `i` through `num` valid vertices
+    is also considered dead. Those dead nodes are stored in `phantomdag`, while the rest
+    ("valid" nodes) are stored in `dag`.
+    - when handling valid nodes at distance `num`, `dag` contains valid nodes at distance
+      `num`, then valid nodes at distance `num+1`. `phantomdag` only contains dead nodes at
+      distance `num+1`.
     - as long as we are handling valid nodes, the resulting created nodes are either valid
-      or explicitly in `avoid` -> store those in a separate list.
-    - when reaching the last valid node at distance `num`, `dag` only contains dead node at
-      distance `num`, then valid nodes at distance `num+1`. Append to `dag` the separate
-      list of `dead` nodes at distance `num+1`
-    - when handling dead nodes, only modify `dag` by appending new dead nodes at distance
-      `num+1`. No valid node at distance `num+1` can be created like so, they would already
-      be in `dag` since they require a valid neighbour at distance `num`, already handled.
+      (-> store them in `dag`) or explicitly in `avoid` (-> store those in `phantomdag`).
+    - when reaching the last valid node at distance `num`, `dag` only contains valid nodes
+      at distance `num+1` while `phantomdag` contains all dead nodes at distance `num` and
+      some at distance `num+1`. Handle all the dead nodes at distance `num` by disregarding
+      all alive neighbors and only appending new dead nodes at distance `num+1` to
+      `phantomdag`.
+    - once all dead nodes at distance `num` have been handled, deal with valid nodes at
+      distance `num+1`, etc.
     =#
     if hasavoid
-        todelete, finaldagoffset, offsetcounter, next_toavoid = prepare_avoid!(dag, vertexnums, g, i, hintsize)
-        next_num = length(dag) + 1
+        phantomdag = prepare_phantomdag!(dag, vertexnums, vertexdict, g, i, ringavoid, cycleavoid)
+        next_stop = length(dag) + 1
+        last_stop_phantomdag = 1
+        next_stop_phantomdag = length(phantomdag) + 1
     else
-        append!(vertexnums, neighbors(g, i))
-        append!(dag, JunctionNode(j, false) for j in 2:length(vertexnums))
+        if cycleavoid isa Nothing
+            append!(vertexnums, neighbors(g, i))
+        else
+            append!(vertexnums, x for x in neighbors(g, i) if !(cycleavoid[x.v] && iszero(x.ofs)))
+        end
+        append!(dag, JunctionNode(j) for j in 2:length(vertexnums))
     end
-    vertexdict = Dict{PeriodicVertex{D},Int}((x => j) for (j,x) in enumerate(vertexnums))
+    for (j, x) in enumerate(vertexnums)
+        vertexdict[x] = j
+    end
     counter = 1
     _depth = depth % SmallIntType
-    next_next_toavoid = 0
-    removed_avoid = 0
     for parents in Iterators.rest(dag, 2)
-        parents.num == _depth && break
         counter += 1
-        if hasavoid
-            if counter == next_toavoid
-                next_next_toavoid = length(dag)+1
-                removed_avoid = 0
+        if hasavoid 
+            if counter == next_stop
+                parents.num == _depth && break
+                next_stop = length(dag) + 1
+                handle_phantomdag!(phantomdag, vertexdict, g, last_stop_phantomdag, next_stop_phantomdag)
+                last_stop_phantomdag = next_stop_phantomdag
+                next_stop_phantomdag = length(phantomdag) + 1
             end
-            if counter == next_num
-                next_num = length(dag) + 1
-                next_toavoid = next_next_toavoid
-                next_next_toavoid = 0
-                update_offsets!(dag, finaldagoffset, counter, removed_avoid)
-            end
-            if isempty(parents.heads)
-                @assert next_next_toavoid != 0
-                removed_avoid += 1
-                todelete[counter] = true
-                push!(parents.heads, 1)
-                finaldagoffset[counter] = 0
-            end
+        else
+            parents.num == _depth && break
         end
         previous = vertexnums[parents.heads[1]]
-        newhead = hasavoid ? finaldagoffset[counter] : counter
+        num = parents.num + one(SmallIntType)
+        current_node = vertexnums[counter]
+        for x in neighbors(g, current_node)
+            x == previous && continue
+            !(cycleavoid isa Nothing) && cycleavoid[x.v] && iszero(x.ofs) && continue
+            dead = hasavoid && ringavoid[x.v] && iszero(x.ofs)
+            idx = get!(vertexdict, x, dead ? -length(phantomdag)-1 : length(dag)+1)
+            if idx == length(dag)+1
+                push!(vertexnums, x)
+                push!(dag, JunctionNode(counter, num, parents.shortroots))
+            elseif idx > counter
+                junction = dag[idx]
+                push!(junction.heads, counter)
+                # We use pointer and unsafe_store! to modify the immutable type JunctionNode
+                # This is only possible because it is stored in a Vector, imposing fixed addresses.
+                ptr = pointer(dag, idx)
+                if num == junction.num
+                    unsafe_incr!(Ptr{SmallIntType}(ptr + lastshortoffset))
+                    unsafe_union!(Ptr{ConstMiniBitSet{UInt32}}(ptr + shortrootsoffset), parents.shortroots.x)
+                else
+                    unsafe_union!(Ptr{ConstMiniBitSet{UInt32}}(ptr + longrootsoffset), parents.shortroots.x)
+                end
+            elseif dead && idx == -length(phantomdag)-1
+                push!(phantomdag, PhantomJunctionNode(x, current_node, num))
+            end
+        end
+    end
+    return dag, vertexnums
+end
+
+
+function arcs_list_minimal(g::PeriodicGraph{D}, i, depth) where D
+    dag = JunctionNode[JunctionNode()]
+    vertexnums = PeriodicVertex{D}[PeriodicVertex{D}(i)]
+    hintsize = ceil(Int, depth^2.9) # empirical estimate
+    sizehint!(vertexnums, hintsize)
+    sizehint!(dag, hintsize)
+    append!(vertexnums, neighbors(g, i))
+    append!(dag, JunctionNode(j) for j in 2:length(vertexnums))    
+    vertexdict = Dict{PeriodicVertex{D},Int}((x => j) for (j,x) in enumerate(vertexnums))
+    # sizehint!(vertexdict, hintsize)
+    counter = 1
+    _depth = depth % SmallIntType
+    for parents in Iterators.rest(dag, 2)
+        counter += 1
+        parents.num == _depth && break
+        previous = vertexnums[parents.heads[1]]
         num = parents.num + one(SmallIntType)
         for x in neighbors(g, vertexnums[counter])
             x == previous && continue
-            skip = hasavoid && avoid[x.v] && iszero(x.ofs)
             idx = get!(vertexdict, x, length(dag)+1)
             if idx == length(dag)+1
-                # push!(dag, skip ? JunctionNode(Int[], num, ConstMiniBitSet{UInt32}()) :
-                #                   JunctionNode(counter, num, parents.shortroots))
                 push!(vertexnums, x)
-                if hasavoid
-                    push!(finaldagoffset, skip ? 0 : (offsetcounter += 1))
-                    push!(todelete, skip)
-                    if newhead == 0
-                        push!(dag, JunctionNode(num, true))
-                    else
-                        push!(dag, JunctionNode(newhead, num, parents.shortroots))
-                    end
-                else
-                    push!(dag, JunctionNode(counter, num, parents.shortroots))
-                end
-            elseif idx > counter && !skip
+                push!(dag, JunctionNode(counter, num, parents.shortroots))
+            elseif idx > counter
                 junction = dag[idx]
-                hasavoid && (todelete[idx] || newhead == 0) && continue
-                push!(junction.heads, newhead)
+                push!(junction.heads, counter)
                 # We use pointer and unsafe_store! to modify the immutable type JunctionNode
                 # This is only possible because it is stored in a Vector, imposing fixed addresses.
                 ptr = pointer(dag, idx)
@@ -279,10 +313,6 @@ function arcs_list(g::PeriodicGraph{D}, i, depth, avoid) where D
                 end
             end
         end
-    end
-    if hasavoid
-        deleteat!(dag, todelete)
-        deleteat!(vertexnums, todelete)
     end
     return dag, vertexnums
 end
@@ -379,53 +409,52 @@ function initial_compatible_arc!(buffer, idx_stack, dag, check, dist, vertexnums
     return last_positions
 end
 
-function _case_0(heads, lastshort, midnode)
-    return Vector{Int}[Int[1, heads[i], midnode] for i in length(heads):-1:(lastshort+1)]
-end
-
-function cycles_ending_at(dag::Vector{JunctionNode}, midnode, dist=nothing, vertexnums=nothing)
-    parents = dag[midnode]
-    length(parents.heads) ≥ 2 || return Vector{Int}[]
-    length(union(parents.shortroots, parents.longroots)) ≥ 2 || return Vector{Int}[]
-    shortest_n = parents.num % Int
-    num = parents.num + one(SmallIntType)
-    parents_lastshort = parents.lastshort % Int
-    iszero(shortest_n) && return _case_0(parents.heads, parents_lastshort, midnode)
-    ret = Vector{Int}[]
-    idx_stack1 = Vector{Int}(undef, shortest_n)
-    idx_stack2 = Vector{Int}(undef, shortest_n-1)
-    buffer = Vector{Int}(undef, 2*shortest_n + 3)
-    buffer[shortest_n+1] = 1
-    buffer[end] = midnode
-    for i1 in length(parents.heads):-1:2
-        if i1 == parents_lastshort
-            Base._deleteend!(buffer, 1)
-            Base._deleteend!(idx_stack1, 1)
-            buffer[end] = midnode
-        end
-        buffer[end-1] = parents.heads[i1]
-        last_positions1 = initial_compatible_arc!(buffer, idx_stack1, dag, false, dist, vertexnums)
-        while last_positions1 != ~zero(UInt64)
-            for i2 in 1:min(i1-1, parents_lastshort)
-                head2 = parents.heads[i2]
-                i1 > parents_lastshort && buffer[end-2] == head2 && continue # 3-cycle near midnode
-                buffer[1] = head2
-                if dist !== nothing && # checking for rings instead of cycles
-                  (is_distance_smaller!(dist, vertexnums[buffer[shortest_n+2]], vertexnums[head2], num) ||
-                  (i1 > parents_lastshort && is_distance_smaller!(dist, vertexnums[buffer[shortest_n+3]], vertexnums[head2], num)))
-                    continue
-                end
-                last_positions2 = initial_compatible_arc!(buffer, idx_stack2, dag, true, dist, vertexnums)
-                while last_positions2 != ~zero(UInt64)
-                    push!(ret, copy(buffer))
-                    last_positions2 = next_compatible_arc!(buffer, last_positions2, idx_stack2, dag, true, dist, vertexnums)
-                end
-            end
-            last_positions1 = next_compatible_arc!(buffer, last_positions1, idx_stack1, dag, false, dist, vertexnums)
-        end
-    end
-    return ret
-end
+# function _case_0(heads, lastshort, midnode)
+#     return Vector{Int}[Int[1, heads[i], midnode] for i in length(heads):-1:(lastshort+1)]
+# end
+# function cycles_ending_at(dag::Vector{JunctionNode}, midnode, dist=nothing, vertexnums=nothing)
+#     parents = dag[midnode]
+#     length(parents.heads) ≥ 2 || return Vector{Int}[]
+#     length(union(parents.shortroots, parents.longroots)) ≥ 2 || return Vector{Int}[]
+#     shortest_n = parents.num % Int
+#     num = parents.num + one(SmallIntType)
+#     parents_lastshort = parents.lastshort % Int
+#     iszero(shortest_n) && return _case_0(parents.heads, parents_lastshort, midnode)
+#     ret = Vector{Int}[]
+#     idx_stack1 = Vector{Int}(undef, shortest_n)
+#     idx_stack2 = Vector{Int}(undef, shortest_n-1)
+#     buffer = Vector{Int}(undef, 2*shortest_n + 3)
+#     buffer[shortest_n+1] = 1
+#     buffer[end] = midnode
+#     for i1 in length(parents.heads):-1:2
+#         if i1 == parents_lastshort
+#             Base._deleteend!(buffer, 1)
+#             Base._deleteend!(idx_stack1, 1)
+#             buffer[end] = midnode
+#         end
+#         buffer[end-1] = parents.heads[i1]
+#         last_positions1 = initial_compatible_arc!(buffer, idx_stack1, dag, false, dist, vertexnums)
+#         while last_positions1 != ~zero(UInt64)
+#             for i2 in 1:min(i1-1, parents_lastshort)
+#                 head2 = parents.heads[i2]
+#                 i1 > parents_lastshort && buffer[end-2] == head2 && continue # 3-cycle near midnode
+#                 buffer[1] = head2
+#                 if dist !== nothing && # checking for rings instead of cycles
+#                   (is_distance_smaller!(dist, vertexnums[buffer[shortest_n+2]], vertexnums[head2], num) ||
+#                   (i1 > parents_lastshort && is_distance_smaller!(dist, vertexnums[buffer[shortest_n+3]], vertexnums[head2], num)))
+#                     continue
+#                 end
+#                 last_positions2 = initial_compatible_arc!(buffer, idx_stack2, dag, true, dist, vertexnums)
+#                 while last_positions2 != ~zero(UInt64)
+#                     push!(ret, copy(buffer))
+#                     last_positions2 = next_compatible_arc!(buffer, last_positions2, idx_stack2, dag, true, dist, vertexnums)
+#                 end
+#             end
+#             last_positions1 = next_compatible_arc!(buffer, last_positions1, idx_stack1, dag, false, dist, vertexnums)
+#         end
+#     end
+#     return ret
+# end
 
 
 """
@@ -483,7 +512,7 @@ function has_been_seen!(dist, i, h)
     false
 end
 
-struct CyclesEndingAt{T}
+struct RingsEndingAt{T}
     dag::Vector{JunctionNode}
     midnode::Int
     heads::Vector{Int}
@@ -493,23 +522,23 @@ struct CyclesEndingAt{T}
 end
 
 """
-    CyclesEndingAt(dag, midnode, record=(nothing,nothing))
+    RingsEndingAt(dag, midnode, record)
 
-Iterable over the cycles of graph `g` around node `i` with `midnode` as vertex furthest
-from `i`. `dag` is obtained from `first(arcs_list(g, i, ...))`.
+Iterable over the rings of graph `g` around node `i` with `midnode` as vertex furthest
+from `i`.
 
-If `record` is set to `(dist, vertexnums)` where `dist == DistanceRecord(g, depth)` and
-`dag, vertexnums == first(arcs_list(g, i, depth, ...))`, this will iterate over the rings
-instead of all cycles.
+`record` should be set to `(dist, vertexnums)` where `dist == DistanceRecord(g, depth)` and
+`dag, vertexnums == first(arcs_list(g, i, depth, ...))`, otherwise the iterator will return
+many more cycles that may not be rings.
 """
-@inline function CyclesEndingAt(dag, midnode, record=(nothing,nothing))
+@inline function RingsEndingAt(dag, midnode, record=(nothing,nothing))
     parents = dag[midnode]
-    CyclesEndingAt{typeof(record)}(dag, midnode, parents.heads, parents.lastshort % Int, parents.num, record)
+    RingsEndingAt{typeof(record)}(dag, midnode, parents.heads, parents.lastshort % Int, parents.num, record)
 end
-Base.IteratorSize(::CyclesEndingAt) = Base.SizeUnknown()
-Base.eltype(::CyclesEndingAt) = Vector{Int}
+Base.IteratorSize(::RingsEndingAt) = Base.SizeUnknown()
+Base.eltype(::RingsEndingAt) = Vector{Int}
 
-function Base.iterate(x::CyclesEndingAt, state=nothing)
+function Base.iterate(x::RingsEndingAt, state=nothing)
     heads = x.heads
     length(heads) ≥ 2 || return nothing
     midnode = x.midnode
@@ -656,46 +685,45 @@ function normalize_cycle!(cycle)
     cycle
 end
 
-function rings_around_old(g::PeriodicGraph{D}, i, depth=15, visited=nothing) where D
-    n = nv(g)
-    dist = DistanceRecord(g, depth)
-    dag, vertexnums = arcs_list(g, i, depth, visited)
-    hashes = [hash_position(x, n) for x in vertexnums]
-    ret = Vector{Int}[]
-    for midnode in 2:length(dag)
-        for cycle in CyclesEndingAt(dag, midnode)
-        # for cycle in cycles_ending_at(dag, midnode)
-            isempty(cycle) && break
-            invalidcycle = false
-            lenc = length(cycle)
-            num = (lenc ÷ 2) % SmallIntType
-            if isodd(lenc)
-                for i in 1:(num-1)
-                    verti = vertexnums[cycle[i]]
-                    vertj1 = vertexnums[cycle[num+i]]
-                    vertj2 = vertexnums[cycle[num+i+1]]
-                    if is_distance_smaller!(dist, verti, vertj1, num) ||
-                        is_distance_smaller!(dist, verti, vertj2, num)
-                        invalidcycle = true
-                        break
-                    end
-                end
-            else
-                for i in 1:(num-1)
-                    verti = vertexnums[cycle[i]]
-                    vertj = vertexnums[cycle[num+i]]
-                    if is_distance_smaller!(dist, verti, vertj, num)
-                        invalidcycle = true
-                        break
-                    end
-                end
-            end
-            invalidcycle && continue
-            push!(ret, normalize_cycle!(hashes[cycle]))
-        end
-    end
-    return ret
-end
+# function rings_around_old(g::PeriodicGraph{D}, i, depth=15, dist=DistanceRecord(g, depth)) where D
+#     n = nv(g)
+#     dag, vertexnums = arcs_list_minimal(g, i, depth)
+#     hashes = [hash_position(x, n) for x in vertexnums]
+#     ret = Vector{Int}[]
+#     for midnode in 2:length(dag)
+#         for cycle in RingsEndingAt(dag, midnode)
+#         # for cycle in cycles_ending_at(dag, midnode)
+#             isempty(cycle) && break
+#             invalidcycle = false
+#             lenc = length(cycle)
+#             num = (lenc ÷ 2) % SmallIntType
+#             if isodd(lenc)
+#                 for i in 1:(num-1)
+#                     verti = vertexnums[cycle[i]]
+#                     vertj1 = vertexnums[cycle[num+i]]
+#                     vertj2 = vertexnums[cycle[num+i+1]]
+#                     if is_distance_smaller!(dist, verti, vertj1, num) ||
+#                         is_distance_smaller!(dist, verti, vertj2, num)
+#                         invalidcycle = true
+#                         break
+#                     end
+#                 end
+#             else
+#                 for i in 1:(num-1)
+#                     verti = vertexnums[cycle[i]]
+#                     vertj = vertexnums[cycle[num+i]]
+#                     if is_distance_smaller!(dist, verti, vertj, num)
+#                         invalidcycle = true
+#                         break
+#                     end
+#                 end
+#             end
+#             invalidcycle && continue
+#             push!(ret, normalize_cycle!(hashes[cycle]))
+#         end
+#     end
+#     return ret
+# end
 
 """
     rings_around(g::PeriodicGraph{D}, i, depth=15) where D
@@ -714,24 +742,22 @@ where `n == nv(g)`. If the offsets of the corresponding vertices are not needed,
 """
 function rings_around(g::PeriodicGraph{D}, i, depth=15, dist=DistanceRecord(g,depth), visited=nothing) where D
     n = nv(g)
-    dag, vertexnums = arcs_list(g, i, depth, visited)
+    ringavoid, cycleavoid = dist isa Nothing ? (nothing, visited) : (visited, nothing)
+    dag, vertexnums = arcs_list(g, i, depth, ringavoid, cycleavoid)
+    # dag, vertexnums = arcs_list_minimal(g, i, depth)
     hashes = [hash_position(x, n) for x in vertexnums]
     ret = Vector{Int}[]
     for midnode in length(dag):-1:2
-        for cycle in CyclesEndingAt(dag, midnode, (dist, vertexnums))
+        for cycle in RingsEndingAt(dag, midnode, (dist, vertexnums))
         # for cycle in cycles_ending_at(dag, midnode, dist, vertexnums)
             newcycle = normalize_cycle!(hashes[cycle])
-            if newcycle == [5, 12, 16, 6, 15, 143, 134, 144, 20, 187, 21, 13]
-                @show i, midnode, cycle
-                @show hashes[cycle]
-            end
             push!(ret, newcycle)
         end
     end
     return ret
 end
 
-cycles_around(g::PeriodicGraph, i, depth=15) = rings_around(g, i, depth, nothing)
+# cycles_around(g::PeriodicGraph, i, depth=15) = rings_around(g, i, depth, nothing)
 
 
 struct NoSymmetry
@@ -790,19 +816,31 @@ function no_neighboring_nodes(g, symmetries)
     return toexplore
 end
 
+
+# function rings_old(g::PeriodicGraph{D}, depth=15, symmetries=NoSymmetry(g), dist=DistanceRecord(g,depth)) where D
+#     toexplore = no_neighboring_nodes(g, symmetries)
+#     allrings = Set{Vector{Int}}()
+#     for x in toexplore
+#         # newrings = rings_around_old(g, x, depth)
+#         # newrings = rings_around_old(g, x, depth, dist)
+#         newrings = rings_around(g, x, depth, dist)
+#         union!(allrings, newrings)
+#     end
+#     return collect(allrings)
+# end
+
 function rings(g::PeriodicGraph{D}, depth=15, symmetries=NoSymmetry(g), dist=DistanceRecord(g,depth)) where D
     toexplore = no_neighboring_nodes(g, symmetries)
-    allrings = Set{Vector{Int}}()
+    ret = Vector{Int}[]
     visited = falses(nv(g))
     for x in toexplore
         newrings = rings_around(g, x, depth, dist, visited)
-        union!(allrings, newrings)
+        append!(ret, newrings)
         visited[x] = true
         for symm in symmetries
             visited[symm[x]] = true
         end
     end
-    ret = collect(allrings)
     symmetries isa NoSymmetry && return ret
     sort!(ret; by=length, rev=true) # to avoid resizing the buffer below too many times
     buffer = similar(first(ret))
@@ -822,4 +860,4 @@ function rings(g::PeriodicGraph{D}, depth=15, symmetries=NoSymmetry(g), dist=Dis
     return ret
 end
 
-cycles(g::PeriodicGraph, depth=15, symmetries=NoSymmetry(g)) = rings(g, depth, symmetries, nothing)
+# cycles(g::PeriodicGraph, depth=15, symmetries=NoSymmetry(g)) = rings(g, depth, symmetries, nothing)
