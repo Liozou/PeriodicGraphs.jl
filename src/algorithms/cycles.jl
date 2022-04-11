@@ -861,3 +861,35 @@ function rings(g::PeriodicGraph{D}, depth=15, symmetries=NoSymmetry(g), dist=Dis
 end
 
 # cycles(g::PeriodicGraph, depth=15, symmetries=NoSymmetry(g)) = rings(g, depth, symmetries, nothing)
+
+
+function fill_bitrs!(rs, buffer, known_pairs, known_pairs_dict)
+    for (i, ring) in enumerate(rs)
+        last_p = first(ring)
+        pairid = get!(known_pairs_dict, (last_p, last(ring)), length(known_pairs)+1)
+        pairid == length(known_pairs)+1 && push!(known_pairs, (last_p, last(ring)))
+        buffer[1] = pairid
+        j = 1
+        for p in Iterators.rest(ring, 2)
+            c = minmax(last_p, p)
+            pairid = get!(known_pairs_dict, c, length(known_pairs)+1)
+            pairid == length(known_pairs)+1 && push!(known_pairs, c)
+            j += 1
+            buffer[j] = pairid
+        end
+        bitrs[i] = BitSet(buffer[1:length(ring)])
+    end
+    nothing
+end
+
+
+function strong_rings(g::PeriodicGraph{D}, depth=15, symmetries=NoSymmetry(g), dist=DistanceRecord(g,depth))
+    rs = rings(g, depth, symmetries, dist)
+    known_pairs = Tuple{Int,Int}[]
+    known_pairs_dict = Dict{Tuple{Int,Int},Int}()
+    bitrs = Vector{BitSet}(undef, length(rs))
+    sizehint!(bitrs, length(bitrs)^2)
+    buffer = Vector{Int}(undef, 2*depth+3)
+    fill_bitrs!(rs, buffer, known_pairs, known_pairs_dict)
+    
+end
