@@ -862,34 +862,224 @@ end
 
 # cycles(g::PeriodicGraph, depth=15, symmetries=NoSymmetry(g)) = rings(g, depth, symmetries, nothing)
 
-
-function fill_bitrs!(rs, buffer, known_pairs, known_pairs_dict)
-    for (i, ring) in enumerate(rs)
-        last_p = first(ring)
-        pairid = get!(known_pairs_dict, (last_p, last(ring)), length(known_pairs)+1)
-        pairid == length(known_pairs)+1 && push!(known_pairs, (last_p, last(ring)))
-        buffer[1] = pairid
-        j = 1
-        for p in Iterators.rest(ring, 2)
-            c = minmax(last_p, p)
-            pairid = get!(known_pairs_dict, c, length(known_pairs)+1)
-            pairid == length(known_pairs)+1 && push!(known_pairs, c)
-            j += 1
-            buffer[j] = pairid
+function cages_around(::PeriodicGraph{D}, depth) where D
+    buffer = MVector{D,Int}(undef)
+    buffer[end] = -depth - 1
+    top = ~zero(UInt64) >> ((65 - D) % UInt8)
+    num = (2*depth+1)^D
+    ret = Vector{SVector{D,Int}}(undef, num)
+    D > 64 && return ret # that's actually an error
+    for i in 1:num
+        fst = trailing_ones(top)
+        top &= ~zero(UInt64) << (fst % UInt8)
+        for i in 1:fst
+            buffer[i] = -depth
         end
-        bitrs[i] = BitSet(buffer[1:length(ring)])
+        if (buffer[fst+1] += 1) == depth
+            top |= one(UInt64) << (fst % UInt8)
+        end
+        ret[i] = buffer
     end
-    nothing
+    return ret
+end
+
+function find_known_pair!(known_pairs_dict, known_pairs, x)
+    pairid = get!(known_pairs_dict, x, length(known_pairs)+1)
+    pairid == length(known_pairs)+1 && push!(known_pairs, x)
+    pairid
+end
+
+function unique_order(cycles)
+    I = sortperm(cycles)
+    last_c = cycles[I[1]]
+    n = length(cycles)
+    toremove = falses(n)
+    i = 2
+    while i ≤ n
+        cycle = cycles[I[i]]
+        if cycle == last_c
+            toremove[i] = true
+        else
+            last_c = cycle
+        end
+        i += 1
+    end
+    deleteat!(I, toremove)
+    J = sort(I; by= x->length(cycles[x]))
+    return J
+end
+
+function sort_cycles(rs, known_pairs, known_pairs_dict, g::PeriodicGraph{D}, depth) where D
+    ofss = cages_around(g, 2)
+    tot_ofss = length(ofss)
+    cycles = Vector{Vector{Int}}(undef, tot_ofss * length(rs))
+    origin = zeros(Int, length(cycles))
+    buffer = Vector{Int}(undef, 2*depth+3)
+    ringbuffer = Vector{PeriodicVertex{D}}(undef, length(buffer))
+    n = nv(g)
+    zero_ofs = (tot_ofss+1) ÷ 2
+    for (i, ring) in enumerate(rs)
+        base = (i-1)*tot_ofss
+        @simd for k in 1:length(ring)
+            ringbuffer[k] = reverse_hash_position(ring[k], n, Val(D))
+        end
+        origin[base+zero_ofs] = i
+        for (i_ofs, ofs) in enumerate(ofss)
+            _last_p = ringbuffer[length(ring)]
+            last_p = PeriodicVertex{D}(_last_p.v, _last_p.ofs .+ ofs)
+            for j in 1:length(ringbuffer)
+                _new_p = ringbuffer[j]
+                new_p = PeriodicVertex{D}(_new_p.v, _new_p.ofs .+ ofs)
+                buffer[j] = find_known_pair!(known_pairs_dict, known_pairs, minmax(last_p, new_p))
+            end
+            cycles[base+i_ofs] = sort!(buffer[1:length(ring)])
+        end
+    end
+    I = unique_order(cycles)
+    return cycles[I], origin[I]
+end
+
+# Complexity O(len(a) + len(b))
+function symdiff_cycles(a::Vector{Int}, b::Vector{Int})
+    c = Int[]
+    lenb = length(b)
+    sizehint!(c, lenb)
+    counter_b = 1
+    y = b[1]
+    i = 0
+    n = length(a)
+    while i < n
+        i += 1
+        x = a[i]
+        while y < x
+            push!(c, y)
+            counter_b += 1
+            counter_b > lenb && @goto fillwitha
+            y = b[counter_b]
+        end
+        if y == x
+            counter_b += 1
+            if counter_b > lenb
+                i += 1
+                @goto fillwitha
+            end
+            y = b[counter_b]
+        else
+            push!(c, x)
+        end
+    end
+    append!(c, @view b[counter_b:lenb])
+    return c
+
+    @label fillwitha
+    i ≤ n && append!(c, @view a[i:n])
+    return c
+end
+
+struct IterativeGaussianElimination
+    rings::Vector{Vector{Int}} # The rows of the matrix, in sparse format
+    lengths::Vector{Int} # For each row, the length of the corresponding ring
+    next::Vector{Int} # Order of the rings (linked list compact format)
+    previous::Vector{Int} # verifies previous[next[i+1]] == i
+    shortcuts::Vector{Int} # verifies shortcuts[i] = 0 || rings[shortcuts[i]][1] == i
+end
+function IterativeGaussianElimination(ring::Vector{Int}, sizehint=ring[1])
+    r1 = ring[1]
+    shortcuts = zeros(Int, sizehint)
+    shortcuts[r1] = 1
+    IterativeGaussianElimination([ring], [length(ring)], [1,0], [0], shortcuts)
+end
+
+# For an IterativeGaussianElimination of i rings of size at most l, symdiff_cycles cost at
+# most (l + lenr) + (2l + lenr) + ... + (il + lenr) = O(i^2*l +i*lenr)
+# If the size of the k-th ring is at most k*l, then the worst-case complexity is O(i^3*l)
+# Calling gaussian_elimination ν times thus leads to a worst-case complexity in O(ν^4*l)
+# The reasonning can probably be refined...
+function gaussian_elimination!(gauss::IterativeGaussianElimination, r::Vector{Int})
+    rings = gauss.rings
+    nexts = gauss.next
+    lengths = gauss.lengths
+    shortcuts = gauss.shortcuts
+    lenshort = length(shortcuts)
+    len = length(r)
+    maxlen = 0
+    last_idx = 0
+    r1 = r[1]
+
+    short = r1 > lenshort ? 0 : shortcuts[r1]
+    idx = short == 0 ? nexts[1] : short
+    ridx = rings[idx]
+    ridx1 = ridx[1]
+    short == 0 || @goto inloop
+
+    # while true
+    while r1 > ridx1
+        @label whilesuperior
+        last_idx = idx
+        idx = nexts[idx+1]
+        idx == 0 && @goto outloop
+        ridx = rings[idx]
+        ridx1 = ridx[1]
+    end
+    r1 == ridx1 || @goto outloop
+    # if length(r) < length(ridx) # optional optimization
+    #     r, ridx = ridx, r
+    #     rings[idx] = ridx
+    # end
+    @label inloop
+    maxlen = max(lengths[idx], maxlen)
+    r = symdiff_cycles(r, ridx)
+    isempty(r) && return false, maxlen < len
+    r1 = r[1]
+    short = r1 > lenshort ? 0 : shortcuts[r1]
+    short == 0 && @goto whilesuperior
+    idx = short
+    ridx = rings[idx]
+    ridx1 = ridx[1]
+    @goto inloop
+
+    # end
+
+    @label outloop
+    push!(rings, r)
+    nrings = length(rings)
+    push!(lengths, len)
+    push!(gauss.previous, last_idx)
+    nextlast = nexts[last_idx+1]
+    if nextlast != 0
+        gauss.previous[nextlast] = nrings
+    end
+    if last_idx == 0
+        push!(nexts, nexts[1])
+        nexts[1] = nrings
+    else
+        push!(nexts, idx)
+        nexts[last_idx+1] = nrings
+    end
+    r1 > length(shortcuts) && append!(shortcuts, 0 for _ in 1:(r1-length(shortcuts)))
+    shortcuts[r1] = nrings
+    true, false
 end
 
 
-function strong_rings(g::PeriodicGraph{D}, depth=15, symmetries=NoSymmetry(g), dist=DistanceRecord(g,depth))
+function strong_rings(g::PeriodicGraph{D}, depth=15, symmetries=NoSymmetry(g), dist=DistanceRecord(g,depth)) where D
     rs = rings(g, depth, symmetries, dist)
-    known_pairs = Tuple{Int,Int}[]
-    known_pairs_dict = Dict{Tuple{Int,Int},Int}()
-    bitrs = Vector{BitSet}(undef, length(rs))
-    sizehint!(bitrs, length(bitrs)^2)
-    buffer = Vector{Int}(undef, 2*depth+3)
-    fill_bitrs!(rs, buffer, known_pairs, known_pairs_dict)
-    
+    known_pairs = Tuple{PeriodicVertex{D},PeriodicVertex{D}}[]
+    known_pairs_dict = Dict{Tuple{PeriodicVertex{D},PeriodicVertex{D}},Int}()
+    hintsize = 3^D*ne(g)^2
+    sizehint!(known_pairs, hintsize)
+    sizehint!(known_pairs_dict, hintsize)
+    cycles, origin = sort_cycles(rs, known_pairs, known_pairs_dict, g, depth)
+
+    fst_ring = popfirst!(cycles)
+    gauss = IterativeGaussianElimination(fst_ring)
+    ret = Vector{PeriodicVertex{D}}[]
+    n = nv(g)
+    origin[1] != 0 && push!(ret, [reverse_hash_position(x, n, Val(D)) for x in rs[origin[1]]])
+    for (i, cycle) in enumerate(cycles)
+        isfree, onlysmallercycles = gaussian_elimination!(gauss, cycle)
+        onlysmallercycles && continue # cycle is a linear combination of smaller cycles
+        origin[i] != 0 && push!(ret, [reverse_hash_position(x, n, Val(D)) for x in rs[origin[i]]])
+    end
+    return ret, known_pairs, known_pairs_dict, gauss
 end
