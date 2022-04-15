@@ -136,7 +136,7 @@ function prepare_phantomdag!(dag, vertexnums, vertexdict, g::PeriodicGraph{D}, i
     phantomdag = PhantomJunctionNode{D}[]
     for x in neighbors(g, i)
         !(cycleavoid isa Nothing) && cycleavoid[x.v] && iszero(x.ofs) && continue
-        if avoid[x.v] && iszero(x.ofs)
+        if avoid[x.v]
             push!(phantomdag, PhantomJunctionNode(x, PeriodicVertex{D}(i), zero(SmallIntType)))
             vertexdict[x] = -length(phantomdag)
         else
@@ -182,6 +182,12 @@ Return `(dag, vertexnums)` where `dag` is a `Vector{JunctionNode}` representing,
 visited node, the dag of all arcs from that node back to `i`, in a compact representation.
 `vertexnums` is a `Vector{PeriodicVertex{D}}` whose `k`-th value is the vertex represented
 by number `k` in the `dag`.
+
+If `ringavoid !== nothing`, this list will not include arcs that pass through nodes of the
+form `PeriodicVertex{D}(j, ofs)` with `j == i` and `ofs < zero(SVector{Int,D})`: this
+allows eagerly pruning cycles that are translations of others. Note that this can result in
+missing cycles if those pass through at least three nodes with `j == i`, but that situation
+should be rare.
 """
 function arcs_list(g::PeriodicGraph{D}, i, depth, ringavoid=nothing, cycleavoid=nothing) where D
     dag = JunctionNode[JunctionNode()]
@@ -222,7 +228,7 @@ function arcs_list(g::PeriodicGraph{D}, i, depth, ringavoid=nothing, cycleavoid=
         if cycleavoid isa Nothing
             append!(vertexnums, neighbors(g, i))
         else
-            append!(vertexnums, x for x in neighbors(g, i) if !(cycleavoid[x.v] && iszero(x.ofs)))
+            append!(vertexnums, x for x in neighbors(g, i) if !cycleavoid[x.v])
         end
         append!(dag, JunctionNode(j) for j in 2:length(vertexnums))
     end
@@ -249,8 +255,8 @@ function arcs_list(g::PeriodicGraph{D}, i, depth, ringavoid=nothing, cycleavoid=
         current_node = vertexnums[counter]
         for x in neighbors(g, current_node)
             x == previous && continue
-            !(cycleavoid isa Nothing) && cycleavoid[x.v] && iszero(x.ofs) && continue
-            dead = hasavoid && ringavoid[x.v] && iszero(x.ofs)
+            !(cycleavoid isa Nothing) && cycleavoid[x.v] && continue
+            dead = hasavoid && (ringavoid[x.v] || (x.v == i && x.ofs < zero(SVector{D})))
             idx = get!(vertexdict, x, dead ? -length(phantomdag)-1 : length(dag)+1)
             if idx == length(dag)+1
                 push!(vertexnums, x)
@@ -567,8 +573,8 @@ function Base.iterate(x::RingsEndingAt, state=nothing)
     i1 = length(heads)
     while i1 > 1
         if i1 == lastshort
-            Base._deleteend!(buffer, 1)
-            Base._deleteend!(idx_stack1, 1)
+            pop!(buffer)
+            pop!(idx_stack1)
             buffer[end] = midnode
         end
         buffer[end-1] = heads[i1]
@@ -726,7 +732,7 @@ end
 # end
 
 """
-    rings_around(g::PeriodicGraph{D}, i, depth=15) where D
+    rings_around(g::PeriodicGraph{D}, i, depth=15, dist=DistanceRecord(g,depth), visited=nothing) where D
 
 Return the list of all rings around node `i` in graph `g` up to length `2*depth+3`.
 
@@ -738,6 +744,11 @@ back the list of actual `PeriodicVertex` of a returned `ring` in the list, do
 where `n == nv(g)`. If the offsets of the corresponding vertices are not needed, simply do
 ```julia
 [mod1(x, n) for x in ring]
+
+`visited` is interpreted as the `ringavoid` argument of `arcs_list` unless
+`dist === nothing`, in which case it is interpreted as the `cycleavoid` argument.
+In particular, unless `dist === nothing`, only one ring will appear in the list even if
+some of its translated images also pass through `PeriodicVertex{D}(i)`.
 ```
 """
 function rings_around(g::PeriodicGraph{D}, i, depth=15, dist=DistanceRecord(g,depth), visited=nothing) where D
@@ -785,33 +796,41 @@ function no_neighboring_nodes(g, symmetries)
     categories = zeros(Int8, n)
     categories[1] = 2
     toexplore = Int[]
-    u_init = 1
-    while u_init !== nothing
-        Q = [u_init]
-        for u in Q
-            newcat = categories[u] == 2 ? UInt8(1) : UInt(2)
-            if newcat == 1
-                if any(x -> symmetries[x.v] == u, neighbors(g, u))
-                    categories[u] = 1
-                    push!(toexplore, u)
-                    newcat = 2
-                else
-                    categories[u] = 3
-                end
-            end
-            for x in neighbors(g, u)
-                v = symmetries[x.v]
-                cat = categories[v]
-                if iseven(cat)
-                    if cat == 0 && iszero(x.ofs)
-                        push!(Q, v)
-                    end
-                    categories[v] = newcat
-                    newcat == 1 && push!(toexplore, v)
-                end
+    next_i_init = 1
+    uniques = unique(symmetries)
+    Q = Int[1]
+    @label loop
+    for u in Q
+        newcat = categories[u] == 2 ? UInt8(1) : UInt(2)
+        if newcat == 1
+            if any(x -> symmetries[x.v] == u, neighbors(g, u))
+                categories[u] = 1
+                push!(toexplore, u)
+                newcat = 2
+            else
+                categories[u] = 3
             end
         end
-        u_init = findfirst(x -> categories[x] == 0, unique(symmetries))
+        for x in neighbors(g, u)
+            v = symmetries[x.v]
+            cat = categories[v]
+            if iseven(cat)
+                if cat == 0 && iszero(x.ofs)
+                    push!(Q, v)
+                end
+                categories[v] = newcat
+                newcat == 1 && push!(toexplore, v)
+            end
+        end
+    end
+    for i_candidate in next_i_init:length(uniques)
+        u_candidate = uniques[i_candidate]
+        if categories[u_candidate] == 0
+            next_i_init = i_candidate + 1
+            empty!(Q)
+            push!(Q, u_candidate)
+            @goto loop
+        end
     end
     return toexplore
 end
@@ -830,7 +849,7 @@ end
 # end
 
 function rings(g::PeriodicGraph{D}, depth=15, symmetries=NoSymmetry(g), dist=DistanceRecord(g,depth)) where D
-    toexplore = no_neighboring_nodes(g, symmetries)
+    toexplore = sort!(no_neighboring_nodes(g, symmetries))
     ret = Vector{Int}[]
     visited = falses(nv(g))
     for x in toexplore
@@ -927,10 +946,11 @@ function sort_cycles(rs, known_pairs, known_pairs_dict, g::PeriodicGraph{D}, dep
         for (i_ofs, ofs) in enumerate(ofss)
             _last_p = ringbuffer[length(ring)]
             last_p = PeriodicVertex{D}(_last_p.v, _last_p.ofs .+ ofs)
-            for j in 1:length(ringbuffer)
+            for j in 1:length(ring)
                 _new_p = ringbuffer[j]
                 new_p = PeriodicVertex{D}(_new_p.v, _new_p.ofs .+ ofs)
                 buffer[j] = find_known_pair!(known_pairs_dict, known_pairs, minmax(last_p, new_p))
+                last_p = new_p
             end
             cycles[base+i_ofs] = sort!(buffer[1:length(ring)])
         end
@@ -941,18 +961,20 @@ end
 
 # Complexity O(len(a) + len(b))
 function symdiff_cycles(a::Vector{Int}, b::Vector{Int})
-    c = Int[]
     lenb = length(b)
-    sizehint!(c, lenb)
+    lena = length(a)
+    c = Vector{Int}(undef, lenb + lena)
     counter_b = 1
-    y = b[1]
+    y = lenb == 0 ? typemax(Int) : (@inbounds b[1])
     i = 0
+    j = 1
     n = length(a)
-    while i < n
+    @inbounds while i < n
         i += 1
         x = a[i]
         while y < x
-            push!(c, y)
+            c[j] = y
+            j += 1
             counter_b += 1
             counter_b > lenb && @goto fillwitha
             y = b[counter_b]
@@ -965,14 +987,19 @@ function symdiff_cycles(a::Vector{Int}, b::Vector{Int})
             end
             y = b[counter_b]
         else
-            push!(c, x)
+            c[j] = x
+            j += 1
         end
     end
-    append!(c, @view b[counter_b:lenb])
+    remaining_towriteb = lenb - counter_b + 1
+    remaining_towriteb > 0 && unsafe_copyto!(c, j, b, counter_b, remaining_towriteb)
+    @inbounds resize!(c, (j + remaining_towriteb - 1) % UInt)
     return c
 
     @label fillwitha
-    i ≤ n && append!(c, @view a[i:n])
+    remaining_towritea = lena - i + 1
+    remaining_towritea > 0 && unsafe_copyto!(c, j, a, i, remaining_towritea)
+    @inbounds resize!(c, (j + remaining_towritea - 1) % UInt)
     return c
 end
 
@@ -1061,6 +1088,30 @@ function gaussian_elimination!(gauss::IterativeGaussianElimination, r::Vector{In
     true, false
 end
 
+function retrieve_vcycle(ecycle, known_pairs)
+    fst_pair = known_pairs[ecycle[1]]
+    last_pair = known_pairs[ecycle[end]]
+    last_v, other_v = fst_pair[1], fst_pair[2]
+    if last_v == last_pair[1] || last_v == last_pair[2]
+        last_v = fst_pair[2]
+        other_v = fst_pair[1]
+    end
+    n = length(ecycle)
+    ret = Vector{typeof(last_v)}(undef, n)
+    ret[1] = last_v
+    ret[n] = other_v
+    for j in 2:(n-1)
+        this_pair = known_pairs[ecycle[j]]
+        other_v = this_pair[1]
+        if last_v == other_v
+            last_v = this_pair[2]
+        else
+            last_v = other_v
+        end
+        ret[j] = last_v
+    end
+    return ret
+end
 
 function strong_rings(g::PeriodicGraph{D}, depth=15, symmetries=NoSymmetry(g), dist=DistanceRecord(g,depth)) where D
     rs = rings(g, depth, symmetries, dist)
@@ -1074,12 +1125,16 @@ function strong_rings(g::PeriodicGraph{D}, depth=15, symmetries=NoSymmetry(g), d
     fst_ring = popfirst!(cycles)
     gauss = IterativeGaussianElimination(fst_ring)
     ret = Vector{PeriodicVertex{D}}[]
+    # tmpret = Vector{Int}[]
     n = nv(g)
-    origin[1] != 0 && push!(ret, [reverse_hash_position(x, n, Val(D)) for x in rs[origin[1]]])
+    orig_1 = popfirst!(origin)
+    orig_1 != 0 && push!(ret, [reverse_hash_position(x, n, Val(D)) for x in rs[orig_1]])
+    # orig_1 != 0 && push!(tmpret, fst_ring)
     for (i, cycle) in enumerate(cycles)
         isfree, onlysmallercycles = gaussian_elimination!(gauss, cycle)
         onlysmallercycles && continue # cycle is a linear combination of smaller cycles
         origin[i] != 0 && push!(ret, [reverse_hash_position(x, n, Val(D)) for x in rs[origin[i]]])
+        # origin[i] != 0 && push!(tmpret, cycle)
     end
-    return ret, known_pairs, known_pairs_dict, gauss
+    return ret#, tmpret, known_pairs, known_pairs_dict, gauss
 end
