@@ -770,8 +770,9 @@ end
 
 # cycles_around(g::PeriodicGraph, i, depth=15) = rings_around(g, i, depth, nothing)
 
+abstract type AbstractSymmetries end
 
-struct NoSymmetry
+struct NoSymmetry <: AbstractSymmetries
     num::Int
     NoSymmetry(g::PeriodicGraph) = new(nv(g))
 end
@@ -781,7 +782,7 @@ Base.iterate(::NoSymmetry) = nothing
 
 
 """
-    no_neighboring_nodes(g, symmetries)
+    no_neighboring_nodes(g, symmetries::AbstractSymmetries)
 
 Return a list of nodes representatives (modulo symmetries) such that all the vertices in
 `g` either have their representative in the list or are surrounded by nodes whose
@@ -790,7 +791,7 @@ representatives are in the list.
 This means that all cycles and rings of `g` have at least one node whose representative is
 in the list.
 """
-function no_neighboring_nodes(g, symmetries)
+function no_neighboring_nodes(g, symmetries::AbstractSymmetries)
     n = nv(g)
     # category: 0 => unvisited, 1 => to explore, 2 => unvisited unknown, 3 => not to explore
     categories = zeros(Int8, n)
@@ -848,7 +849,7 @@ end
 #     return collect(allrings)
 # end
 
-function rings(g::PeriodicGraph{D}, depth=15, symmetries=NoSymmetry(g), dist=DistanceRecord(g,depth)) where D
+function rings(g::PeriodicGraph{D}, depth=15, symmetries::AbstractSymmetries=NoSymmetry(g), dist=DistanceRecord(g,depth)) where D
     toexplore = sort!(no_neighboring_nodes(g, symmetries))
     ret = Vector{Int}[]
     visited = falses(nv(g))
@@ -1113,7 +1114,7 @@ function retrieve_vcycle(ecycle, known_pairs)
     return ret
 end
 
-function strong_rings(g::PeriodicGraph{D}, depth=15, symmetries=NoSymmetry(g), dist=DistanceRecord(g,depth)) where D
+function strong_rings(g::PeriodicGraph{D}, depth=15, symmetries::AbstractSymmetries=NoSymmetry(g), dist=DistanceRecord(g,depth)) where D
     rs = rings(g, depth, symmetries, dist)
     known_pairs = Tuple{PeriodicVertex{D},PeriodicVertex{D}}[]
     known_pairs_dict = Dict{Tuple{PeriodicVertex{D},PeriodicVertex{D}},Int}()
