@@ -1,3 +1,8 @@
+# Ring statistics
+
+export rings, strong_rings, RingAttributions
+
+
 struct ConstMiniBitSet{T} <: AbstractSet{Int}
     x::T
     global _constminibitset(x::T) where {T} = new{T}(x)
@@ -770,16 +775,6 @@ end
 
 # cycles_around(g::PeriodicGraph, i, depth=15) = rings_around(g, i, depth, nothing)
 
-abstract type AbstractSymmetries end
-
-struct NoSymmetry <: AbstractSymmetries
-    num::Int
-    NoSymmetry(g::PeriodicGraph) = new(nv(g))
-end
-Base.getindex(::NoSymmetry, i::Integer) = i
-Base.unique(x::NoSymmetry) = Base.OneTo(x.num)
-Base.iterate(::NoSymmetry) = nothing
-
 
 """
     no_neighboring_nodes(g, symmetries::AbstractSymmetries)
@@ -1125,17 +1120,61 @@ function strong_rings(g::PeriodicGraph{D}, depth=15, symmetries::AbstractSymmetr
 
     fst_ring = popfirst!(cycles)
     gauss = IterativeGaussianElimination(fst_ring)
-    ret = Vector{PeriodicVertex{D}}[]
+    ret = Vector{Int}[]
     # tmpret = Vector{Int}[]
     n = nv(g)
     orig_1 = popfirst!(origin)
-    orig_1 != 0 && push!(ret, [reverse_hash_position(x, n, Val(D)) for x in rs[orig_1]])
+    orig_1 != 0 && push!(ret, rs[orig_1])
     # orig_1 != 0 && push!(tmpret, fst_ring)
     for (i, cycle) in enumerate(cycles)
         isfree, onlysmallercycles = gaussian_elimination!(gauss, cycle)
         onlysmallercycles && continue # cycle is a linear combination of smaller cycles
-        origin[i] != 0 && push!(ret, [reverse_hash_position(x, n, Val(D)) for x in rs[origin[i]]])
+        origin[i] != 0 && push!(ret, rs[origin[i]])
         # origin[i] != 0 && push!(tmpret, cycle)
     end
     return ret#, tmpret, known_pairs, known_pairs_dict, gauss
 end
+
+
+struct RingAttributions{D}
+    rings::Vector{Vector{PeriodicVertex{D}}}
+    attrs::Vector{Vector{Tuple{Int,Int}}}
+
+    function RingAttributions{D}(n, rs::Vector{Vector{Int}}) where D
+        rings = [Vector{PeriodicVertex{D}}(undef, length(r)) for r in rs]
+        attrs = [Tuple{Int,Int}[] for _ in 1:n]
+        for (i, r) in enumerate(rs)
+            ring = rings[i]
+            for (j, x) in enumerate(r)
+                u = reverse_hash_position(x, n, Val(D))
+                ring[j] = u
+                push!(attrs[u.v], (i, j))
+            end
+        end
+        return new{D}(rings, attrs)
+    end
+end
+
+function RingAttributions(g::PeriodicGraph{D}, strong=false, depth=15, symmetries::AbstractSymmetries=NoSymmetry(g), dist=DistanceRecord(g,depth)) where D
+    rs = (strong ? strong_rings : rings)(g, depth, symmetries, dist)
+    return RingAttributions{D}(nv(g), rs)
+end
+
+Base.getindex(ras::RingAttributions{D}, i::Integer) where {D} = RingIncluding(ras, i)
+
+struct RingIncluding{D}
+    ras::RingAttributions{D}
+    i::Int
+end
+function Base.getindex(ri::RingIncluding{D}, j::Integer) where {D}
+    newring_idx, idx = ri.ras.attrs[ri.i][j]
+    newring = ri.ras.rings[newring_idx]
+    ofs = newring[idx].ofs
+    return PeriodicNeighborList{D}(.-ofs, newring)
+end
+function Base.iterate(ri::RingIncluding{D}, state=1) where {D}
+    state > length(ri) && return nothing
+    return (@inbounds ri[state]), state+1
+end
+Base.length(ri::RingIncluding) = length(ri.ras.attrs[ri.i])
+Base.eltype(::RingIncluding{D}) where {D} = PeriodicGraphs.PeriodicNeighborList

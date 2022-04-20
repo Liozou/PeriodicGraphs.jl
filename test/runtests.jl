@@ -653,3 +653,20 @@ end
     @test d == 1
     @test reduce(+, s .* λ) == d
 end
+
+@testset "Ring statistics" begin
+    lta = PeriodicGraph("3 1 3 0 0 0 1 7 0 -1 0 1 9 0 0 -1 1 21 -1 0 -1 2 4 0 0 0 2 8 0 -1 0 2 9 0 0 0 2 21 -1 0 0 3 5 0 0 0 3 10 0 0 -1 3 22 -1 0 -1 4 6 0 0 0 4 10 0 0 0 4 22 -1 0 0 5 6 0 0 0 5 11 0 0 0 5 23 -1 0 0 6 12 0 0 0 6 24 -1 0 0 7 8 0 0 0 7 11 0 0 0 7 23 -1 0 0 8 12 0 0 0 8 24 -1 0 0 9 10 0 0 0 9 16 0 -1 0 10 13 0 0 0 11 12 0 0 0 11 14 0 0 0 12 15 0 0 0 13 14 0 0 1 13 15 0 0 0 13 17 0 0 0 14 16 0 0 -1 14 18 0 0 0 15 16 0 0 0 15 19 0 0 0 16 20 0 0 0 17 18 0 0 1 17 19 0 0 0 17 22 0 0 0 18 20 0 0 -1 18 23 0 0 0 19 20 0 0 0 19 24 0 0 0 20 21 0 1 0 21 22 0 0 0 23 24 0 0 0");
+    rings_lta = RingAttributions(lta)
+    @test length(rings_lta.rings) == 113
+    @test all(==(59), length.(rings_lta.attrs))
+    rings_lta_strong = RingAttributions(lta, true)
+    @test length(rings_lta_strong.rings) == 29
+    for i in 1:nv(lta)
+        rs = collect(rings_lta_strong[i])
+        @test length(rs) == 6
+        sort!(rs; by=length)
+        @test length(rs[1]) == length(rs[2]) == length(rs[3]) == 4
+        @test length(rs[4]) == length(rs[5]) == 6
+        @test length(rs[6]) == 8
+    end
+end
