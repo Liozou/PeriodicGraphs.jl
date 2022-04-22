@@ -541,6 +541,17 @@ from `i`.
 `record` should be set to `(dist, vertexnums)` where `dist == DistanceRecord(g, depth)` and
 `dag, vertexnums == first(arcs_list(g, i, depth, ...))`, otherwise the iterator will return
 many more cycles that may not be rings.
+
+!!! warning
+    In order to efficiently cycle through the rings, the iterator reuses a buffer on which
+    the rings are written. This means that performing an iteration will change the value
+    of the previously returned result: for example, `collect(RingsEndingAt(...))` will
+    yield a list containing the same list (unlikely to be an actual ring) repeated over.
+    To actually obtain the list of rings, copy the result as they arrive by doing
+    `map(copy, RingsEndingAt(...))` or `[copy(x) for x in RingsEndingAt(...)]` for example.
+
+    This also means that the list returned at each iteration should never be modified
+    directly: copy it before.
 """
 @inline function RingsEndingAt(dag, midnode, record=(nothing,nothing))
     parents = dag[midnode]
@@ -555,13 +566,14 @@ function Base.iterate(x::RingsEndingAt, state=nothing)
     midnode = x.midnode
     lastshort = x.lastshort
     shortest_n = x.parentsnum % Int
-    if iszero(shortest_n)
+    if iszero(shortest_n) # rings ending on a neighbour of the root
         length(heads) > lastshort || return nothing
         if state === nothing
-            state = (Int[1, length(heads)+1, midnode], Int[], Int[], zero(UInt64), zero(UInt64), 0, 0)
+            state = (Int[1, 0, midnode], Int[length(heads)+1], Int[], zero(UInt64), zero(UInt64), 0, 0)
         end
-        i0 = @inbounds state[1][2] -= 1
+        i0 = @inbounds state[2][1] -= 1
         i0 > lastshort || return nothing
+        state[1][2] = heads[i0]
         return state[1], state
     end
     dag = x.dag
@@ -777,7 +789,7 @@ end
 
 
 """
-    no_neighboring_nodes(g, symmetries::AbstractSymmetries)
+    no_neighboring_nodes(g, symmetries::AbstractSymmetryGroup)
 
 Return a list of nodes representatives (modulo symmetries) such that all the vertices in
 `g` either have their representative in the list or are surrounded by nodes whose
@@ -786,7 +798,7 @@ representatives are in the list.
 This means that all cycles and rings of `g` have at least one node whose representative is
 in the list.
 """
-function no_neighboring_nodes(g, symmetries::AbstractSymmetries)
+function no_neighboring_nodes(g, symmetries::AbstractSymmetryGroup)
     n = nv(g)
     # category: 0 => unvisited, 1 => to explore, 2 => unvisited unknown, 3 => not to explore
     categories = zeros(Int8, n)
@@ -799,7 +811,7 @@ function no_neighboring_nodes(g, symmetries::AbstractSymmetries)
     for u in Q
         newcat = categories[u] == 2 ? UInt8(1) : UInt(2)
         if newcat == 1
-            if any(x -> symmetries[x.v] == u, neighbors(g, u))
+            if any(x -> symmetries(x.v) == u, neighbors(g, u))
                 categories[u] = 1
                 push!(toexplore, u)
                 newcat = 2
@@ -808,7 +820,7 @@ function no_neighboring_nodes(g, symmetries::AbstractSymmetries)
             end
         end
         for x in neighbors(g, u)
-            v = symmetries[x.v]
+            v = symmetries(x.v)
             cat = categories[v]
             if iseven(cat)
                 if cat == 0 && iszero(x.ofs)
@@ -832,7 +844,7 @@ function no_neighboring_nodes(g, symmetries::AbstractSymmetries)
 end
 
 
-# function rings_old(g::PeriodicGraph{D}, depth=15, symmetries=NoSymmetry(g), dist=DistanceRecord(g,depth)) where D
+# function rings_old(g::PeriodicGraph{D}, depth=15, symmetries=NoSymmetryGroup(g), dist=DistanceRecord(g,depth)) where D
 #     toexplore = no_neighboring_nodes(g, symmetries)
 #     allrings = Set{Vector{Int}}()
 #     for x in toexplore
@@ -844,7 +856,7 @@ end
 #     return collect(allrings)
 # end
 
-function rings(g::PeriodicGraph{D}, depth=15, symmetries::AbstractSymmetries=NoSymmetry(g), dist=DistanceRecord(g,depth)) where D
+function rings(g::PeriodicGraph{D}, depth=15, symmetries::AbstractSymmetryGroup=NoSymmetryGroup(g), dist=DistanceRecord(g,depth)) where D
     toexplore = sort!(no_neighboring_nodes(g, symmetries))
     ret = Vector{Int}[]
     visited = falses(nv(g))
@@ -856,18 +868,20 @@ function rings(g::PeriodicGraph{D}, depth=15, symmetries::AbstractSymmetries=NoS
             visited[symm[x]] = true
         end
     end
-    symmetries isa NoSymmetry && return ret
+    symmetries isa NoSymmetryGroup && return ret
     sort!(ret; by=length, rev=true) # to avoid resizing the buffer below too many times
     buffer = similar(first(ret))
+    n = nv(g)
+    uniquerings = [[reverse_hash_position(x, n, Val(D)) for x in r] for r in ret]
     for symm in symmetries
-        for ring in allrings
+        for ring in uniquerings
             nr = length(ring)
             resize!(buffer, nr)
             #=@inbounds=# for i in 1:nr
-                buffer[i] = symm[ring[x]]
+                buffer[i] = hash_position(symm[ring[i]], n)
             end
             normalize_cycle!(buffer)
-            if buffer ∉ allrings
+            if buffer ∉ uniquerings
                 push!(ret, copy(buffer))
             end
         end
@@ -875,7 +889,7 @@ function rings(g::PeriodicGraph{D}, depth=15, symmetries::AbstractSymmetries=NoS
     return ret
 end
 
-# cycles(g::PeriodicGraph, depth=15, symmetries=NoSymmetry(g)) = rings(g, depth, symmetries, nothing)
+# cycles(g::PeriodicGraph, depth=15, symmetries=NoSymmetryGroup(g)) = rings(g, depth, symmetries, nothing)
 
 function cages_around(::PeriodicGraph{D}, depth) where D
     buffer = MVector{D,Int}(undef)
@@ -1109,7 +1123,7 @@ function retrieve_vcycle(ecycle, known_pairs)
     return ret
 end
 
-function strong_rings(g::PeriodicGraph{D}, depth=15, symmetries::AbstractSymmetries=NoSymmetry(g), dist=DistanceRecord(g,depth)) where D
+function strong_rings(g::PeriodicGraph{D}, depth=15, symmetries::AbstractSymmetryGroup=NoSymmetryGroup(g), dist=DistanceRecord(g,depth)) where D
     rs = rings(g, depth, symmetries, dist)
     known_pairs = Tuple{PeriodicVertex{D},PeriodicVertex{D}}[]
     known_pairs_dict = Dict{Tuple{PeriodicVertex{D},PeriodicVertex{D}},Int}()
@@ -1155,12 +1169,15 @@ struct RingAttributions{D}
     end
 end
 
-function RingAttributions(g::PeriodicGraph{D}, strong=false, depth=15, symmetries::AbstractSymmetries=NoSymmetry(g), dist=DistanceRecord(g,depth)) where D
+function RingAttributions(g::PeriodicGraph{D}, strong=false, depth=15, symmetries::AbstractSymmetryGroup=NoSymmetryGroup(g), dist=DistanceRecord(g,depth)) where D
     rs = (strong ? strong_rings : rings)(g, depth, symmetries, dist)
     return RingAttributions{D}(nv(g), rs)
 end
 
-Base.getindex(ras::RingAttributions{D}, i::Integer) where {D} = RingIncluding(ras, i)
+Base.@propagate_inbounds function Base.getindex(ras::RingAttributions, i::Integer)
+    @boundscheck checkbounds(ras.attrs, i)
+    RingIncluding(ras, i)
+end
 
 struct RingIncluding{D}
     ras::RingAttributions{D}
@@ -1178,3 +1195,7 @@ function Base.iterate(ri::RingIncluding{D}, state=1) where {D}
 end
 Base.length(ri::RingIncluding) = length(ri.ras.attrs[ri.i])
 Base.eltype(::RingIncluding{D}) where {D} = PeriodicGraphs.PeriodicNeighborList
+
+function Base.show(io::IO, ri::RingIncluding{D}) where D
+    print(io, RingIncluding{D}, '(', length(ri), " rings containing vertex ", ri.i, ')')
+end

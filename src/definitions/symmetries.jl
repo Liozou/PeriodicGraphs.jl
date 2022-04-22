@@ -1,66 +1,104 @@
 # Symmetry type definitions and interface
 
-# The main `Symmetries` type is defined in PeriodicGraphEmbeddings.jl since it requires a
+# The main `SymmetryGroup3D` type is defined in PeriodicGraphEmbeddings.jl since it requires a
 # 3D embedding
 
-export AbstractSymmetries, NoSymmetry, IncludingIdentity
+export AbstractSymmetry, PeriodicSymmetry, AbstractSymmetryGroup, NoSymmetryGroup, IncludingIdentity
 
 """
-    AbstractSymmetries
+    abstract type AbstractSymmetry end
+
+An abstract type representing a symmetry of a graph
+
+## Interface
+
+Subtypes of `AbstractSymmetry` must implement a method for `Base.getindex` so that, for
+`symm` of type `T <: AbstractSymmetry` and `x` a vertex, `symm[x]` is the image of `x` by
+the symmetry.
+Additionally, `symm[i]` should be the identifier of vertex `symm[x]` when `i` is the
+identifier of vertex `x`.
+"""
+abstract type AbstractSymmetry end
+
+# # Prototype: a typical AbstractSymmetry could be the following PeriodicSymmetry
+#
+# struct PeriodicSymmetry{D} <: AbstractSymmetry
+#     vmap::Vector{PeriodicVertex{D}}
+#     rotation::Matrix{Int}
+# end
+# Base.getindex(symm::PeriodicSymmetry, i::Integer) = symm.vmap[i].v
+# function Base.getindex(symm::PeriodicSymmetry{D}, x::PeriodicVertex{D}) where D
+#     dst = symm.vmap[x.v]
+#     _ofs = muladd(symm.rotation, x.ofs, dst.ofs)
+#     PeriodicVertex{D}(dst.v, _ofs)
+# end
+
+struct TrivialIdentitySymmetry <: AbstractSymmetry end
+Base.getindex(::TrivialIdentitySymmetry, x) = x
+
+"""
+    AbstractSymmetryGroup{T<:AbstractSymmetry}
 
 An abstract type representing the set of symmetries of a graph.
 
 ## Interface
 
-Any `AbstractSymmetries` type must define methods for `Base` functions `getindex`, `unique`,
-`iterate`, `eltype` and `length` such that, for `s` of type `T <: AbstractSymmetries`,
-- `s[i]` is a representative on the symmetry orbit of vertex `i` such that all vertices on
+Any `AbstractSymmetryGroup` type must define methods for `Base` functions
+`unique`, `iterate`, `eltype`, `length` and `one`
+such that, for any `s` of type
+`<: AbstractSymmetryGroup`:
+- `s(i)` is a representative on the symmetry orbit of vertex `i` such that all vertices on
   the orbit share the same representative.
 - `unique(s)` is the list of such representatives.
-- `for vmap in s` yields the list of symmetry operations, represented as `vmaps`. The
-  identity should not be part of these `vmaps`, except for the `IncludingIdentity` type.
+- iterating over `s` yields the list of symmetry operations `symm`, each represented as an
+  object of type `T` (where `T <: AbstractSymmetry` is the parameter to `typeof(s)`).
+  The identity symmetry should not be part of these yielded `symm`, except for the
+  specific `IncludingIdentity` subtype of `AbstractSymmetryGroup`.
+- `one(s)` is the identity symmetry of type `T`.
 """
-abstract type AbstractSymmetries end
+abstract type AbstractSymmetryGroup{T<:AbstractSymmetry} end
 
 """
-    NoSymmetry <: AbstractSymmetries
+    NoSymmetryGroup <: AbstractSymmetryGroup{PeriodicSymmetry}
 
-The trivial `AbstractSymmetries` devoid of any symmetry operation.
+The trivial `AbstractSymmetryGroup` devoid of any symmetry operation.
 """
-struct NoSymmetry <: AbstractSymmetries
+struct NoSymmetryGroup <: AbstractSymmetryGroup{TrivialIdentitySymmetry}
     num::Int
-    NoSymmetry(g::PeriodicGraph) = new(nv(g))
+    NoSymmetryGroup(g::PeriodicGraph) = new(nv(g))
 end
-Base.getindex(::NoSymmetry, i::Integer) = i
-Base.unique(x::NoSymmetry) = Base.OneTo(x.num)
-Base.iterate(::NoSymmetry, _=nothing) = nothing
-Base.eltype(::Type{NoSymmetry}) = Base.OneTo
-Base.length(::NoSymmetry) = 0
-
+(::NoSymmetryGroup)(i::Integer) = i
+Base.unique(x::NoSymmetryGroup) = Base.OneTo(x.num)
+Base.iterate(::NoSymmetryGroup) = nothing
+Base.eltype(::Type{NoSymmetryGroup}) = PeriodicSymmetry{0}
+Base.length(::NoSymmetryGroup) = 0
+Base.one(::NoSymmetryGroup) = TrivialIdentitySymmetry()
 
 """
-    IncludingIdentity{T<:AbstractSymmetries} <: AbstractSymmetries
+    IncludingIdentity{T<:AbstractSymmetryGroup} <: AbstractSymmetryGroup
 
 Wrapper around an `AbstractSymmetry` that explicitly includes the identity operation.
 """
-struct IncludingIdentity{T<:AbstractSymmetries} <: AbstractSymmetries
+struct IncludingIdentity{S<:AbstractSymmetry,T<:AbstractSymmetryGroup{S}} <: AbstractSymmetryGroup{S}
     symm::T
+    IncludingIdentity{T}(symm::AbstractSymmetryGroup{S}) where {S,T} = IncludingIdentity{S,T}(symm)
 end
+IncludingIdentity(s::T) where {T<:AbstractSymmetryGroup} = IncludingIdentity{T}(s)
+IncludingIdentity(s::IncludingIdentity) = s
 
-Base.getindex(s::IncludingIdentity, i::Integer) = s.symm[i]
+(s::IncludingIdentity)(i::Integer) = (s.symm)(i)
 Base.unique(s::IncludingIdentity) = unique(s.symm)
-function Base.iterate(s::IncludingIdentity{T}, state=nothing) where T
-    if state isa Nothing
-        n = T <: NoSymmetry ? s.symm.num : length(first(s.symm))
-        elt = eltype(s.symm)
-        if elt isa SubArray{Int,1,Matrix{Int},Tuple{Base.Slice{Base.OneTo{Int}},Int},true}
-            # Special case for the `Symmetries` type because SubArray{...}(1:n) errors
-            return first(eachcol(reshape(collect(Base.OneTo(n)), n, 1))), 1
-        else
-            return elt(Base.OneTo(n)), 1
-        end
-    end
-    return iterate(s.symm, state)
+Base.iterate(s::IncludingIdentity) = (one(s.symm), nothing)
+function Base.iterate(s::IncludingIdentity{T}, state) where T
+    x = state isa Nothing ? iterate(s.symm) : iterate(s.symm, something(state))
+    x isa Nothing && return nothing
+    a, b = x
+    return a, Some(b)
 end
 Base.eltype(::Type{IncludingIdentity{T}}) where {T} = eltype(T)
 Base.length(s::IncludingIdentity) = 1 + length(s.symm)
+function Base.getindex(s::IncludingIdentity, i::Integer)
+    i == 1 && return one(s.symm)
+    s.symm[i-1]
+end
+Base.one(::IncludingIdentity) = error("Querying the identity symmetry operation of an IncludingIdentity is forbidden.")
