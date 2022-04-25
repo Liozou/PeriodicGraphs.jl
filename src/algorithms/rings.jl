@@ -30,7 +30,7 @@ Base.setdiff(x::ConstMiniBitSet, y::ConstMiniBitSet) = _constminibitset(x.x & ~y
 Base.symdiff(x::ConstMiniBitSet, y::ConstMiniBitSet) = _constminibitset(x.x ⊻ y.x)
 Base.length(x::ConstMiniBitSet) = count_ones(x.x)
 Base.isempty(x::ConstMiniBitSet) = iszero(x.x)
-Base.eltype(::Type{ConstMiniBitSet}) = Int
+Base.eltype(::Type{ConstMiniBitSet{T}}) where {T} = Int
 
 function Base.iterate(::ConstMiniBitSet{T}, x::T) where T
     first = trailing_zeros(x)
@@ -44,7 +44,7 @@ Base.isdone(x::ConstMiniBitSet) = Base.isdone(x, x.x)
 hasonly(x::ConstMiniBitSet{T}, i::Integer) where {T} = iszero(x.x & ~(one(T) << (i % UInt8)))
 
 Base.minimum(x::ConstMiniBitSet) = first(x)
-Base.maximum(x::ConstMiniBitSet{T}) where {T} = 8*sizeof(T) - leading_zeros(x.x)
+Base.maximum(x::ConstMiniBitSet{T}) where {T} = 8*sizeof(T) - leading_zeros(x.x) - 1
 
 function Base.show(io::IO, x::ConstMiniBitSet)
     print(io, ConstMiniBitSet, "([")

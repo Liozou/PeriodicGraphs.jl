@@ -68,6 +68,10 @@ end
     @test dst(PeriodicEdge(2, 2, (1,))) == 2
     @test ofs(PeriodicEdge(1, 1, (0,1,3))) == SVector{3,Int}(0,1,3)
     @test PeriodicEdge2D(1, 1, (2,3)) < PeriodicEdge2D(1, 1, (3,0)) < PeriodicEdge2D(1, 2, (3,0)) < PeriodicEdge2D(2, 2, (3,0))
+    @test cmp(PeriodicEdge{0}(2, 3, ()), PeriodicEdge(1, 3, ())) == 1
+    @test cmp(PeriodicEdge2D(1, 1, (0,1)), PeriodicEdge(1, 3, (0,0))) == -1
+    @test cmp(PeriodicEdge2D(7, 7, (1,2)), PeriodicEdge(7, 7, (2,0))) == -1
+    @test cmp(PeriodicEdge1D(1, 2, (0,)), PeriodicEdge(1, 2, (0,))) == 0
     @test ndims(PeriodicEdge(1, 2, ())) == 0ndims(PeriodicEdge(1, 2, ())) == 0
     @test ndims(PeriodicEdge(1, 1, (2,0,0,0))) == 4
 end
@@ -531,7 +535,9 @@ end
 
     @test all(seen)
 
-    for x in (SVector{0,Int}(), SVector{1,Int}(47), SVector{2,Int}(13,-34), SVector{3,Int}(13,-10,24))
+    for x in (SVector{0,Int}(), SVector{1,Int}(47),
+              SVector{2,Int}(9,3), SVector{2,Int}(13,-34),
+              SVector{3,Int}(8,7,6), SVector{3,Int}(4,-8,-1), SVector{3,Int}(13,-10,24))
         @test PeriodicGraphs.reverse_hash_position(PeriodicGraphs.hash_position(x), Val(length(x))) == x
         y = PeriodicVertex(7, x)
         @test PeriodicGraphs.reverse_hash_position(PeriodicGraphs.hash_position(y, 13), 13, Val(length(x))) == y
@@ -679,6 +685,21 @@ const mtn = PeriodicGraph("3 1 2 0 0 0 1 8 0 0 -1 1 11 0 -1 0 1 29 -1 0 0 2 7 0 
     @test all(==(4), degree(mtn))
 end
 
+@testset "ConstMiniBitSet" begin
+    for T in (UInt32, UInt64)
+        CMBitSet = PeriodicGraphs.ConstMiniBitSet{T}
+        c = CMBitSet([2,3,13])
+        @test 3 ∈ c
+        @test length(c) == 3
+        @test 4 ∈ symdiff(c, CMBitSet(4))
+        @test 4 == only(setdiff(CMBitSet([13, 4]), c))
+        @test isempty(CMBitSet())
+        @test collect(c) == [2, 3, 13]
+        @test minimum(c) == 2
+        @test maximum(c) == 13
+    end
+end
+
 @testset "Ring statistics" begin
     rings_nab = RingAttributions(nab)
     nab_rotated = nab[[3,1,2,4,5]]
@@ -729,6 +750,9 @@ function Base.getindex(symm::PeriodicSymmetry3D, x::PeriodicVertex3D)
     _ofs = muladd(symm.rotation, x.ofs, dst.ofs)
     PeriodicVertex3D(dst.v, _ofs)
 end
+function Base.isequal(x::PeriodicSymmetry3D{T}, y::PeriodicSymmetry3D{T}) where T
+    x.vmap == y.vmap && x.rotation == y.rotation && x.translation == y.translation
+end
 
 struct SymmetryGroup3D{T} <: PeriodicGraphs.AbstractSymmetryGroup{PeriodicSymmetry3D{T}}
     vmaps::Matrix{PeriodicVertex3D}
@@ -745,11 +769,12 @@ function Base.getindex(s::SymmetryGroup3D{T}, i::Integer) where {T}
     PeriodicSymmetry3D{T}((@view s.vmaps[:,i]), s.rotations[i], s.translations[i])
 end
 Base.iterate(s::SymmetryGroup3D, state=1) = state > length(s) ? nothing : (s[state], state+1)
-Base.eltype(::Type{SymmetryGroup3D}) = SubArray{Int,1,Matrix{Int},Tuple{Base.Slice{Base.OneTo{Int}},Int},true}
+Base.eltype(::Type{SymmetryGroup3D{T}}) where {T} = PeriodicSymmetry3D{T}
 Base.length(s::SymmetryGroup3D) = length(s.rotations)
-function Base.one(s::SymmetryGroup3D)
+function Base.one(s::SymmetryGroup3D{T}) where T
     n = length(s.uniquemap)
-    @view reshape(collect(Base.OneTo(n)), n, 1)[:,1]
+    PeriodicSymmetry3D{T}((@view reshape(collect(PeriodicVertex3D.(Base.OneTo(n))), n, 1)[:,1]),
+                          one(SMatrix{3,3,Int,9}), zero(SVector{3,T}))
 end
 
 const symmetries_lta = SymmetryGroup3D{Rational{Int32}}(
@@ -786,4 +811,15 @@ end
     for (r1, r2) in zip(ras, rasym)
         @test canonicalize_ri(r1) == canonicalize_ri(r2)
     end
+    withid = PeriodicGraphs.IncludingIdentity(symmetries_lta)
+    @test eltype(withid) == PeriodicSymmetry3D{Rational{Int32}}
+    @test length(withid) == 48
+    id = first(withid)
+    @test isequal(id, one(symmetries_lta))
+    trivsymmgroup = PeriodicGraphs.IncludingIdentity(NoSymmetryGroup(lta))
+    @test unique(trivsymmgroup) == 1:nv(lta)
+    @test length(trivsymmgroup) == 1
+    triv = only(trivsymmgroup)
+    @test triv[5] == 5
+    @test triv[PeriodicVertex3D(14)] == PeriodicVertex3D(14)
 end
