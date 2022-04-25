@@ -41,9 +41,6 @@ Base.iterate(x::ConstMiniBitSet) = iterate(x, x.x)
 Base.isdone(::ConstMiniBitSet{T}, x::T) where {T} = iszero(x)
 Base.isdone(x::ConstMiniBitSet) = Base.isdone(x, x.x)
 
-# minabove(x::ConstMiniBitSet, i::Integer) = trailing_zeros(x.x & ((~one(UInt64)) << (i % UInt8)))
-# minaboveeq(x::ConstMiniBitSet, i::Integer) = trailing_zeros(x.x & ((~zero(UInt64)) << (i % UInt8)))
-# nonemptyintersect(x::ConstMiniBitSet, y::ConstMiniBitSet) = !iszero(x.x & y.y)
 hasonly(x::ConstMiniBitSet{T}, i::Integer) where {T} = iszero(x.x & ~(one(T) << (i % UInt8)))
 
 Base.minimum(x::ConstMiniBitSet) = first(x)
@@ -54,51 +51,6 @@ function Base.show(io::IO, x::ConstMiniBitSet)
     join(io, x, ", ")
     print(io, "])")
 end
-
-
-# mutable struct MiniBitSet <: AbstractSet{Int}
-#     x::UInt64
-#     global _minibitset(x::UInt64) = new(x)
-# end
-
-# MiniBitSet(x::ConstMiniBitSet) = _minibitset(x.x)
-# ConstMiniBitSet(x::MiniBitSet) = _constminibitset(x.x)
-
-# MiniBitSet() = _minibitset(zero(UInt64))
-# MiniBitSet(i::Integer) = _minibitset(one(UInt64) << (i % UInt8))
-# MiniBitSet(l::AbstractVector{<:Integer}) = MiniBitSet(ConstMiniBitSet(l))
-
-# Base.push!(x::MiniBitSet, i::Integer) = (x.x |= (one(UInt64) << (i % UInt8)); x)
-# Base.union!(x::MiniBitSet, y::MiniBitSet) = (x.x |= y.x; x)
-# Base.intersect!(x::MiniBitSet, y::MiniBitSet) = (x.x &= y.x; x)
-# Base.in(x::MiniBitSet, i::Integer) = ((x.x >> (i % UInt8)) & one(UInt64)) % Bool
-# Base.setdiff!(x::MiniBitSet, y::MiniBitSet) = (x.x &= ~y.x; x)
-# Base.symdiff!(x::MiniBitSet, y::MiniBitSet) = (x.x ⊻= y.x; x)
-# Base.copymutable(x::MiniBitSet) = _minibitset(x.x)
-# Base.copy(x::MiniBitSet) = _minibitset(x.x)
-
-# Base.iterate(x::MiniBitSet, u::UInt64=x.x) = iterate(ConstMiniBitSet(), u)
-# Base.isdone(::MiniBitSet, x::UInt64) = iszero(x)
-# Base.isdone(x::MiniBitSet) = Base.isdone(x, x.x)
-
-# # minabove(x::MiniBitSet, i::Integer) = minabove(ConstMiniBitSet(x), i)
-# # minaboveeq(x::MiniBitSet, i::Integer) = minaboveeq(ConstMiniBitSet(x), i)
-# # isnonemptyintersect(x::MiniBitSet, y::MiniBitSet) = !iszero(x.x & y.x)
-# # isnonemptysymdiff(x::MiniBitSet, y::MiniBitSet) = !iszero(x.x ⊻ y.x)
-# # hasonly(x::MiniBitSet, i::Integer) = iszero(x.x & ~(one(UInt64) << (i % UInt8)))
-# # hasotherthan(x::MiniBitSet, i::Integer) = !iszero(x.x & ~(one(UInt64) << (i % UInt8)))
-
-# Base.length(x::MiniBitSet) = length(ConstMiniBitSet(x))
-# Base.eltype(x::MiniBitSet) = eltype(ConstMiniBitSet(x))
-# Base.maximum(x::MiniBitSet) = maximum(ConstMiniBitSet(x))
-# Base.minimum(x::MiniBitSet) = minimum(ConstMiniBitSet(x))
-# Base.isempty(x::MiniBitSet) = isempty(ConstMiniBitSet(x))
-
-# function Base.show(io::IO, x::MiniBitSet)
-#     print(io, MiniBitSet, "([")
-#     join(io, x, ", ")
-#     print(io, "])")
-# end
 
 
 const SmallIntType = Int8 # used for distances mostly
@@ -117,13 +69,6 @@ JunctionNode() = JunctionNode(Int[], -one(SmallIntType), ConstMiniBitSet{UInt32}
 JunctionNode(head::Integer, num, roots::ConstMiniBitSet) = JunctionNode(Int[head], num, roots)
 JunctionNode(num::Integer, ::Nothing) = JunctionNode(Int[], num, ConstMiniBitSet{UInt32}())
 JunctionNode(root::Integer) = JunctionNode(1, zero(SmallIntType), ConstMiniBitSet{UInt32}(root))
-# function JunctionNode(root::Integer, skip::Bool)
-#     if skip
-#         JunctionNode(Int[], root, ConstMiniBitSet{UInt32}())
-#     else
-#         JunctionNode(1, zero(SmallIntType), ConstMiniBitSet{UInt32}(root))
-#     end
-# end
 
 function Base.show(io::IO, x::JunctionNode)
     print(io, "JunctionNode([")
@@ -420,53 +365,6 @@ function initial_compatible_arc!(buffer, idx_stack, dag, check, dist, vertexnums
     return last_positions
 end
 
-# function _case_0(heads, lastshort, midnode)
-#     return Vector{Int}[Int[1, heads[i], midnode] for i in length(heads):-1:(lastshort+1)]
-# end
-# function cycles_ending_at(dag::Vector{JunctionNode}, midnode, dist=nothing, vertexnums=nothing)
-#     parents = dag[midnode]
-#     length(parents.heads) ≥ 2 || return Vector{Int}[]
-#     length(union(parents.shortroots, parents.longroots)) ≥ 2 || return Vector{Int}[]
-#     shortest_n = parents.num % Int
-#     num = parents.num + one(SmallIntType)
-#     parents_lastshort = parents.lastshort % Int
-#     iszero(shortest_n) && return _case_0(parents.heads, parents_lastshort, midnode)
-#     ret = Vector{Int}[]
-#     idx_stack1 = Vector{Int}(undef, shortest_n)
-#     idx_stack2 = Vector{Int}(undef, shortest_n-1)
-#     buffer = Vector{Int}(undef, 2*shortest_n + 3)
-#     buffer[shortest_n+1] = 1
-#     buffer[end] = midnode
-#     for i1 in length(parents.heads):-1:2
-#         if i1 == parents_lastshort
-#             Base._deleteend!(buffer, 1)
-#             Base._deleteend!(idx_stack1, 1)
-#             buffer[end] = midnode
-#         end
-#         buffer[end-1] = parents.heads[i1]
-#         last_positions1 = initial_compatible_arc!(buffer, idx_stack1, dag, false, dist, vertexnums)
-#         while last_positions1 != ~zero(UInt64)
-#             for i2 in 1:min(i1-1, parents_lastshort)
-#                 head2 = parents.heads[i2]
-#                 i1 > parents_lastshort && buffer[end-2] == head2 && continue # 3-cycle near midnode
-#                 buffer[1] = head2
-#                 if dist !== nothing && # checking for rings instead of cycles
-#                   (is_distance_smaller!(dist, vertexnums[buffer[shortest_n+2]], vertexnums[head2], num) ||
-#                   (i1 > parents_lastshort && is_distance_smaller!(dist, vertexnums[buffer[shortest_n+3]], vertexnums[head2], num)))
-#                     continue
-#                 end
-#                 last_positions2 = initial_compatible_arc!(buffer, idx_stack2, dag, true, dist, vertexnums)
-#                 while last_positions2 != ~zero(UInt64)
-#                     push!(ret, copy(buffer))
-#                     last_positions2 = next_compatible_arc!(buffer, last_positions2, idx_stack2, dag, true, dist, vertexnums)
-#                 end
-#             end
-#             last_positions1 = next_compatible_arc!(buffer, last_positions1, idx_stack1, dag, false, dist, vertexnums)
-#         end
-#     end
-#     return ret
-# end
-
 
 """
     DistanceRecord{D}
@@ -691,84 +589,67 @@ function is_distance_smaller!(dist, verti, vertj, stop)
 end
 
 """
-    normalize_cycle!(cycle)
+    normalize_cycle!(cycle::Vector{Int}, g::PeriodicGraph)
 
-In-place rotate and possibly reverse `cycle` so that `cycle[1] == minimum(cycle)` and
-`cycle[2] < cycle[end]`.
+In-place rotate and possibly reverse `cycle`, a `Vector{Int}` whose elements are the
+`hash_position` of vertices of `g` so that the result is the same for all such vectors that
+represent the same cycle, possibly translated to a different unit cell or rotated.
 """
-function normalize_cycle!(cycle)
-    fst = argmin(cycle)
+function normalize_cycle!(cycle::Vector{Int}, g::PeriodicGraph{D}) where D
+    n = nv(g)
+    minval, fst = findmin(x -> mod1(x, n), cycle)
+    ofsfst = reverse_hash_position(fld1(cycle[fst], n) - 1, Val(D))
     lenc = length(cycle)
-    endreverse = cycle[mod1(fst+1, lenc)] < cycle[mod1(fst-1, lenc)]
+    for i in fst+1:lenc
+        _f, _m = fldmod1(cycle[i], n)
+        _m == minval || continue
+        ofs = reverse_hash_position(_f - 1, Val(D))
+        if ofs < ofsfst
+            ofsfst = ofs
+            fst = i
+        end
+    end
+    before_f, before_m = fldmod1(cycle[mod1(fst-1, lenc)], n)
+    after_f, after_m = fldmod1(cycle[mod1(fst+1, lenc)], n)
+    endreverse = before_m > after_m ||
+                 (before_m == after_m && reverse_hash_position(before_f, Val(D)) > reverse_hash_position(after_f, Val(D)))
     if fst != 1 || !endreverse
         reverse!(cycle, 1, fst - endreverse)
         reverse!(cycle, fst - endreverse + 1, lenc)
         endreverse && reverse!(cycle)
     end
+    if !iszero(ofsfst)
+        for i in 1:lenc
+            rev = reverse_hash_position(cycle[i], g)
+            cycle[i] = hash_position(PeriodicVertex{D}(rev.v, rev.ofs .- ofsfst), n)
+        end
+    end
     cycle
 end
 
-# function rings_around_old(g::PeriodicGraph{D}, i, depth=15, dist=DistanceRecord(g, depth)) where D
-#     n = nv(g)
-#     dag, vertexnums = arcs_list_minimal(g, i, depth)
-#     hashes = [hash_position(x, n) for x in vertexnums]
-#     ret = Vector{Int}[]
-#     for midnode in 2:length(dag)
-#         for cycle in RingsEndingAt(dag, midnode)
-#         # for cycle in cycles_ending_at(dag, midnode)
-#             isempty(cycle) && break
-#             invalidcycle = false
-#             lenc = length(cycle)
-#             num = (lenc ÷ 2) % SmallIntType
-#             if isodd(lenc)
-#                 for i in 1:(num-1)
-#                     verti = vertexnums[cycle[i]]
-#                     vertj1 = vertexnums[cycle[num+i]]
-#                     vertj2 = vertexnums[cycle[num+i+1]]
-#                     if is_distance_smaller!(dist, verti, vertj1, num) ||
-#                         is_distance_smaller!(dist, verti, vertj2, num)
-#                         invalidcycle = true
-#                         break
-#                     end
-#                 end
-#             else
-#                 for i in 1:(num-1)
-#                     verti = vertexnums[cycle[i]]
-#                     vertj = vertexnums[cycle[num+i]]
-#                     if is_distance_smaller!(dist, verti, vertj, num)
-#                         invalidcycle = true
-#                         break
-#                     end
-#                 end
-#             end
-#             invalidcycle && continue
-#             push!(ret, normalize_cycle!(hashes[cycle]))
-#         end
-#     end
-#     return ret
-# end
 
 """
-    rings_around(g::PeriodicGraph{D}, i, depth=15, dist=DistanceRecord(g,depth), visited=nothing) where D
+    rings_around(g::PeriodicGraph{D}, i, depth=15, dist::DistanceRecord=DistanceRecord(g,depth), visited=nothing) where D
 
 Return the list of all rings around node `i` in graph `g` up to length `2*depth+3`.
 
 The returned rings are the list of `hash_position` of the corresponding vertices. To get
 back the list of actual `PeriodicVertex` of a returned `ring` in the list, do
 ```julia
-[reverse_hash_position(x, n, Val(D)) for x in ring]
+[reverse_hash_position(x, g) for x in ring]
 ```
-where `n == nv(g)`. If the offsets of the corresponding vertices are not needed, simply do
+
+If the offsets of the corresponding vertices are not needed, simply do
 ```julia
-[mod1(x, n) for x in ring]
+[mod1(x, n) for x in ring]   # n should be nv(g)
+```
 
 `visited` is interpreted as the `ringavoid` argument of `arcs_list` unless
 `dist === nothing`, in which case it is interpreted as the `cycleavoid` argument.
 In particular, unless `dist === nothing`, only one ring will appear in the list even if
 some of its translated images also pass through `PeriodicVertex{D}(i)`.
-```
 """
-function rings_around(g::PeriodicGraph{D}, i, depth=15, dist=DistanceRecord(g,depth), visited=nothing) where D
+function rings_around(g::PeriodicGraph{D}, i, depth=15, dist::DistanceRecord=DistanceRecord(g,depth), visited=nothing) where D
     n = nv(g)
     ringavoid, cycleavoid = dist isa Nothing ? (nothing, visited) : (visited, nothing)
     dag, vertexnums = arcs_list(g, i, depth, ringavoid, cycleavoid)
@@ -778,7 +659,7 @@ function rings_around(g::PeriodicGraph{D}, i, depth=15, dist=DistanceRecord(g,de
     for midnode in length(dag):-1:2
         for cycle in RingsEndingAt(dag, midnode, (dist, vertexnums))
         # for cycle in cycles_ending_at(dag, midnode, dist, vertexnums)
-            newcycle = normalize_cycle!(hashes[cycle])
+            newcycle = normalize_cycle!(hashes[cycle], g)
             push!(ret, newcycle)
         end
     end
@@ -844,19 +725,23 @@ function no_neighboring_nodes(g, symmetries::AbstractSymmetryGroup)
 end
 
 
-# function rings_old(g::PeriodicGraph{D}, depth=15, symmetries=NoSymmetryGroup(g), dist=DistanceRecord(g,depth)) where D
-#     toexplore = no_neighboring_nodes(g, symmetries)
-#     allrings = Set{Vector{Int}}()
-#     for x in toexplore
-#         # newrings = rings_around_old(g, x, depth)
-#         # newrings = rings_around_old(g, x, depth, dist)
-#         newrings = rings_around(g, x, depth, dist)
-#         union!(allrings, newrings)
-#     end
-#     return collect(allrings)
-# end
+"""
+    rings(g::PeriodicGraph{D}, depth=15, symmetries::AbstractSymmetryGroup=NoSymmetryGroup(g), dist::DistanceRecord=DistanceRecord(g,depth)) where D
 
-function rings(g::PeriodicGraph{D}, depth=15, symmetries::AbstractSymmetryGroup=NoSymmetryGroup(g), dist=DistanceRecord(g,depth)) where D
+Compute the list of rings in `g`, up to length `2*depth+3`.
+
+A ring is a cycle of the graph for which there is no shortcut, i.e. no path in the graph
+between two vertices of the cycle that is shorter than either path connecting the vertices
+in the cycle.
+
+If provided, `symmetries` should represent the symmetries of the graph as a
+`AbstractSymmetryGroup` object respecting its documented interface.
+
+A `DistanceRecord` `dist` can be optionally provided to track the distances between pairs
+of vertices in the graph.
+
+"""
+function rings(g::PeriodicGraph{D}, depth=15, symmetries::AbstractSymmetryGroup=NoSymmetryGroup(g), dist::DistanceRecord=DistanceRecord(g,depth)) where D
     toexplore = sort!(no_neighboring_nodes(g, symmetries))
     ret = Vector{Int}[]
     visited = falses(nv(g))
@@ -872,7 +757,8 @@ function rings(g::PeriodicGraph{D}, depth=15, symmetries::AbstractSymmetryGroup=
     sort!(ret; by=length, rev=true) # to avoid resizing the buffer below too many times
     buffer = similar(first(ret))
     n = nv(g)
-    uniquerings = [[reverse_hash_position(x, n, Val(D)) for x in r] for r in ret]
+    uniquerings = [[reverse_hash_position(x, g) for x in r] for r in ret]
+    ringset = Set{Vector{Int}}(ret)
     for symm in symmetries
         for ring in uniquerings
             nr = length(ring)
@@ -880,9 +766,11 @@ function rings(g::PeriodicGraph{D}, depth=15, symmetries::AbstractSymmetryGroup=
             #=@inbounds=# for i in 1:nr
                 buffer[i] = hash_position(symm[ring[i]], n)
             end
-            normalize_cycle!(buffer)
-            if buffer ∉ uniquerings
-                push!(ret, copy(buffer))
+            normalize_cycle!(buffer, g)
+            if buffer ∉ ringset
+                cp = copy(buffer)
+                push!(ret, cp)
+                push!(ringset, cp)
             end
         end
     end
@@ -945,12 +833,11 @@ function sort_cycles(rs, known_pairs, known_pairs_dict, g::PeriodicGraph{D}, dep
     origin = zeros(Int, length(cycles))
     buffer = Vector{Int}(undef, 2*depth+3)
     ringbuffer = Vector{PeriodicVertex{D}}(undef, length(buffer))
-    n = nv(g)
     zero_ofs = (tot_ofss+1) ÷ 2
     for (i, ring) in enumerate(rs)
         base = (i-1)*tot_ofss
         @simd for k in 1:length(ring)
-            ringbuffer[k] = reverse_hash_position(ring[k], n, Val(D))
+            ringbuffer[k] = reverse_hash_position(ring[k], g)
         end
         origin[base+zero_ofs] = i
         for (i_ofs, ofs) in enumerate(ofss)
@@ -1012,6 +899,7 @@ function symdiff_cycles(a::Vector{Int}, b::Vector{Int})
     @inbounds resize!(c, (j + remaining_towritea - 1) % UInt)
     return c
 end
+
 
 struct IterativeGaussianElimination
     rings::Vector{Vector{Int}} # The rows of the matrix, in sparse format
@@ -1123,8 +1011,7 @@ function retrieve_vcycle(ecycle, known_pairs)
     return ret
 end
 
-function strong_rings(g::PeriodicGraph{D}, depth=15, symmetries::AbstractSymmetryGroup=NoSymmetryGroup(g), dist=DistanceRecord(g,depth)) where D
-    rs = rings(g, depth, symmetries, dist)
+function strong_rings(rs::Vector{Vector{Int}}, g::PeriodicGraph{D}, depth=15) where D
     known_pairs = Tuple{PeriodicVertex{D},PeriodicVertex{D}}[]
     known_pairs_dict = Dict{Tuple{PeriodicVertex{D},PeriodicVertex{D}},Int}()
     hintsize = 3^D*ne(g)^2
@@ -1135,20 +1022,31 @@ function strong_rings(g::PeriodicGraph{D}, depth=15, symmetries::AbstractSymmetr
     fst_ring = popfirst!(cycles)
     gauss = IterativeGaussianElimination(fst_ring)
     ret = Vector{Int}[]
-    # tmpret = Vector{Int}[]
     n = nv(g)
     orig_1 = popfirst!(origin)
     orig_1 != 0 && push!(ret, rs[orig_1])
-    # orig_1 != 0 && push!(tmpret, fst_ring)
     for (i, cycle) in enumerate(cycles)
-        isfree, onlysmallercycles = gaussian_elimination!(gauss, cycle)
+        _, onlysmallercycles = gaussian_elimination!(gauss, cycle)
         onlysmallercycles && continue # cycle is a linear combination of smaller cycles
         origin[i] != 0 && push!(ret, rs[origin[i]])
-        # origin[i] != 0 && push!(tmpret, cycle)
     end
-    return ret#, tmpret, known_pairs, known_pairs_dict, gauss
+    return ret
 end
 
+"""
+    strong_rings(g::PeriodicGraph{D}, depth=15, symmetries::AbstractSymmetryGroup=NoSymmetryGroup(g), dist::DistanceRecord=DistanceRecord(g,depth)) where D
+
+Compute the list of strong rings in `g`, up to length `2*depth+3`. See [`rings`](@ref) for
+the meaning of the other arguments.
+
+A strong ring is a cycle of the graph which cannot be decomposed into a sum of any number
+of smaller cycles. By comparison, a ring is a cycle which cannot be decomposed into a sum
+of two smaller cycles. In particular, all strong rings are rings.
+"""
+function strong_rings(g::PeriodicGraph, depth=15, symmetries::AbstractSymmetryGroup=NoSymmetryGroup(g), dist::DistanceRecord=DistanceRecord(g,depth))
+    rs = rings(g, depth, symmetries, dist)
+    return strong_rings(rs, g, depth)
+end
 
 struct RingAttributions{D}
     rings::Vector{Vector{PeriodicVertex{D}}}
@@ -1169,7 +1067,7 @@ struct RingAttributions{D}
     end
 end
 
-function RingAttributions(g::PeriodicGraph{D}, strong=false, depth=15, symmetries::AbstractSymmetryGroup=NoSymmetryGroup(g), dist=DistanceRecord(g,depth)) where D
+function RingAttributions(g::PeriodicGraph{D}, strong=false, depth=15, symmetries::AbstractSymmetryGroup=NoSymmetryGroup(g), dist::DistanceRecord=DistanceRecord(g,depth)) where D
     rs = (strong ? strong_rings : rings)(g, depth, symmetries, dist)
     return RingAttributions{D}(nv(g), rs)
 end
@@ -1177,6 +1075,12 @@ end
 Base.@propagate_inbounds function Base.getindex(ras::RingAttributions, i::Integer)
     @boundscheck checkbounds(ras.attrs, i)
     RingIncluding(ras, i)
+end
+Base.length(ras::RingAttributions) = length(ras.attrs)
+Base.eltype(::Type{RingAttributions{D}}) where {D} = RingIncluding{D}
+
+function Base.show(io::IO, ras::RingAttributions)
+    println(io, typeof(ras), "(rings per node:", length.(ras.attrs), ')')
 end
 
 struct RingIncluding{D}
@@ -1189,12 +1093,12 @@ function Base.getindex(ri::RingIncluding{D}, j::Integer) where {D}
     ofs = newring[idx].ofs
     return PeriodicNeighborList{D}(.-ofs, newring)
 end
-function Base.iterate(ri::RingIncluding{D}, state=1) where {D}
-    state > length(ri) && return nothing
-    return (@inbounds ri[state]), state+1
-end
 Base.length(ri::RingIncluding) = length(ri.ras.attrs[ri.i])
-Base.eltype(::RingIncluding{D}) where {D} = PeriodicGraphs.PeriodicNeighborList
+Base.eltype(::Type{RingIncluding{D}}) where {D} = PeriodicNeighborList
+
+function Base.iterate(r::Union{RingAttributions,RingIncluding}, state=1)
+    (state % UInt) - 1 < length(r) ? ((@inbounds r[state]), state+1) : nothing
+end
 
 function Base.show(io::IO, ri::RingIncluding{D}) where D
     print(io, RingIncluding{D}, '(', length(ri), " rings containing vertex ", ri.i, ')')
