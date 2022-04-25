@@ -8,7 +8,8 @@ Graphs.ne(g::PeriodicGraph) = g.ne[]
 Graphs.nv(g::PeriodicGraph) = length(g.nlist)
 Graphs.vertices(g::PeriodicGraph) = Base.OneTo(nv(g))
 Graphs.edges(g::PeriodicGraph{N}) where {N} = PeriodicEdgeIter{N}(g)
-eltype(g::PeriodicGraph{N}) where {N} = PeriodicVertex{N}
+# Note: the following is intentionally not eltype(::Type{PeriodicGraph{N}}) where N
+eltype(::PeriodicGraph{N}) where {N} = PeriodicVertex{N}
 Graphs.edgetype(::PeriodicGraph{N}) where {N} = PeriodicEdge{N}
 function Graphs.has_edge(g::PeriodicGraph, s, d)
     ((s < 1) | (s > nv(g))) && return false
