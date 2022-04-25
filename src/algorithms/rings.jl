@@ -232,45 +232,126 @@ function arcs_list(g::PeriodicGraph{D}, i, depth, ringavoid=nothing, cycleavoid=
 end
 
 
-function arcs_list_minimal(g::PeriodicGraph{D}, i, depth) where D
-    dag = JunctionNode[JunctionNode()]
-    vertexnums = PeriodicVertex{D}[PeriodicVertex{D}(i)]
-    hintsize = ceil(Int, depth^2.9) # empirical estimate
-    sizehint!(vertexnums, hintsize)
-    sizehint!(dag, hintsize)
-    append!(vertexnums, neighbors(g, i))
-    append!(dag, JunctionNode(j) for j in 2:length(vertexnums))    
-    vertexdict = Dict{PeriodicVertex{D},Int}((x => j) for (j,x) in enumerate(vertexnums))
-    # sizehint!(vertexdict, hintsize)
-    counter = 1
-    _depth = depth % SmallIntType
-    for parents in Iterators.rest(dag, 2)
+"""
+    DistanceRecord{D}
+
+Record of the computed distances between vertices of a graph.
+"""
+struct DistanceRecord{D}
+    g::PeriodicGraph{D}
+    shortdist::Matrix{SmallIntType}
+    distances::Dict{Tuple{Int,Int},SmallIntType}
+    Q_lists::Vector{Vector{Tuple{PeriodicVertex{D},SmallIntType}}}
+    first_indices::Vector{Int}
+    seenshort::BitMatrix
+    seens::Vector{Set{Int}}
+end
+function DistanceRecord(g::PeriodicGraph{D}, depth) where D
+    n = nv(g)
+    dim = n*(1 + fld(depth, 2))^D
+    shortdist = zeros(SmallIntType, n, dim)
+    distances = Dict{Tuple{Int,Int},Int}()
+    Q_lists = Vector{Vector{Tuple{PeriodicVertex{D},SmallIntType}}}(undef, n)
+    first_indices = zeros(Int, n)
+    seenshort = falses(n, dim)
+    seens = Vector{Set{Int}}(undef, n)
+    return DistanceRecord{D}(g, shortdist, distances, Q_lists, first_indices, seenshort, seens)
+end
+
+function known_distance(dist::DistanceRecord, i, j)
+    a, b = minmax(i,j)
+    if checkbounds(Bool, dist.shortdist, a, b)
+        @inbounds dist.shortdist[a,b]
+    else
+        get(dist.distances, (a, b), zero(SmallIntType))
+    end
+end
+function set_distance!(dist::DistanceRecord, i, j, d)
+    a, b = minmax(i,j)
+    if checkbounds(Bool, dist.shortdist, a, b)
+        @inbounds dist.shortdist[a,b] = d % SmallIntType
+    else
+        dist.distances[(a,b)] = d % SmallIntType
+    end
+end
+
+function has_been_seen!(dist, i, h)
+    if h ≤ size(dist.seenshort)[2]
+        @inbounds dist.seenshort[i,h] && return true
+        @inbounds dist.seenshort[i,h] = true
+    else
+        seen = @inbounds dist.seens[i]
+        h ∈ seen && return true
+        push!(seen, h)
+    end
+    false
+end
+
+
+function bfs_smaller!(dist, i, j, start, stop)
+    Q = dist.Q_lists[i]
+    graph = dist.g
+    counter = start
+    encountered = false
+    n = nv(graph)
+    for (u, d) in Iterators.rest(Q, start)
+        (encountered || d+one(SmallIntType) ≥ stop) && break
         counter += 1
-        parents.num == _depth && break
-        previous = vertexnums[parents.heads[1]]
-        num = parents.num + one(SmallIntType)
-        for x in neighbors(g, vertexnums[counter])
-            x == previous && continue
-            idx = get!(vertexdict, x, length(dag)+1)
-            if idx == length(dag)+1
-                push!(vertexnums, x)
-                push!(dag, JunctionNode(counter, num, parents.shortroots))
-            elseif idx > counter
-                junction = dag[idx]
-                push!(junction.heads, counter)
-                # We use pointer and unsafe_store! to modify the immutable type JunctionNode
-                # This is only possible because it is stored in a Vector, imposing fixed addresses.
-                ptr = pointer(dag, idx)
-                if num == junction.num
-                    unsafe_incr!(Ptr{SmallIntType}(ptr + lastshortoffset))
-                    unsafe_union!(Ptr{ConstMiniBitSet{UInt32}}(ptr + shortrootsoffset), parents.shortroots.x)
-                else
-                    unsafe_union!(Ptr{ConstMiniBitSet{UInt32}}(ptr + longrootsoffset), parents.shortroots.x)
-                end
-            end
+        for x in neighbors(graph, u)
+            h = hash_position(x, n)
+            has_been_seen!(dist, i, h) && continue
+            push!(Q, (x, d+1))
+            set_distance!(dist, i, h, d+one(SmallIntType))
+            encountered |= h == j
         end
     end
-    return dag, vertexnums
+    dist.first_indices[i] = counter
+    if !encountered
+        set_distance!(dist, i, j, stop)
+        return false
+    end
+    return true
+end
+
+function _reorderinit(first_indices, verti, vertj::PeriodicVertex{D}) where D
+    n = length(first_indices)
+    counterij = (first_indices[verti.v], first_indices[vertj.v])
+    if counterij[1] < counterij[2]
+        return vertj.v, hash_position(PeriodicVertex{D}(verti.v, verti.ofs .- vertj.ofs), n), counterij[2]
+    end
+    return verti.v, hash_position(PeriodicVertex{D}(vertj.v, vertj.ofs .- verti.ofs), n), counterij[1]
+end
+
+function init_distance_record!(dist, i, j)
+    dist.first_indices[i] = 1
+    g = dist.g
+    dist.Q_lists[i] = [(x, one(SmallIntType)) for x in neighbors(g, i)]
+    _seen = Set{Int}(i)
+    encountered = false
+    n = nv(g)
+    for x in neighbors(g, i)
+        _h = hash_position(x, n)
+        set_distance!(dist, i, _h, one(SmallIntType))
+        if _h ≤ (@inbounds size(dist.seenshort)[2])
+            dist.seenshort[i,_h] = true
+        else
+            push!(_seen, _h)
+        end
+        encountered |= _h == j
+    end
+    dist.seens[i] = _seen
+    encountered
+end
+
+function is_distance_smaller!(dist, verti, vertj, stop)
+    i, j, start = _reorderinit(dist.first_indices, verti, vertj)
+    known = known_distance(dist, i, j)
+    iszero(known) || return known < stop
+    if start == 0
+        init_distance_record!(dist, i, j) && return one(stop) < stop
+        start = 1
+    end
+    return bfs_smaller!(dist, i, j, start, stop)
 end
 
 
@@ -366,61 +447,6 @@ function initial_compatible_arc!(buffer, idx_stack, dag, check, dist, vertexnums
 end
 
 
-"""
-    DistanceRecord{D}
-
-Record of the computed distances between vertices of a graph.
-"""
-struct DistanceRecord{D}
-    g::PeriodicGraph{D}
-    shortdist::Matrix{SmallIntType}
-    distances::Dict{Tuple{Int,Int},SmallIntType}
-    Q_lists::Vector{Vector{Tuple{PeriodicVertex{D},SmallIntType}}}
-    first_indices::Vector{Int}
-    seenshort::BitMatrix
-    seens::Vector{Set{Int}}
-end
-function DistanceRecord(g::PeriodicGraph{D}, depth) where D
-    n = nv(g)
-    dim = n*(1 + fld(depth, 2))^D
-    shortdist = zeros(SmallIntType, n, dim)
-    distances = Dict{Tuple{Int,Int},Int}()
-    Q_lists = Vector{Vector{Tuple{PeriodicVertex{D},SmallIntType}}}(undef, n)
-    first_indices = zeros(Int, n)
-    seenshort = falses(n, dim)
-    seens = Vector{Set{Int}}(undef, n)
-    return DistanceRecord{D}(g, shortdist, distances, Q_lists, first_indices, seenshort, seens)
-end
-
-function known_distance(dist::DistanceRecord, i, j)
-    a, b = minmax(i,j)
-    if checkbounds(Bool, dist.shortdist, a, b)
-        @inbounds dist.shortdist[a,b]
-    else
-        get(dist.distances, (a, b), zero(SmallIntType))
-    end
-end
-function set_distance!(dist::DistanceRecord, i, j, d)
-    a, b = minmax(i,j)
-    if checkbounds(Bool, dist.shortdist, a, b)
-        @inbounds dist.shortdist[a,b] = d % SmallIntType
-    else
-        dist.distances[(a,b)] = d % SmallIntType
-    end
-end
-
-function has_been_seen!(dist, i, h)
-    if h ≤ size(dist.seenshort)[2]
-        @inbounds dist.seenshort[i,h] && return true
-        @inbounds dist.seenshort[i,h] = true
-    else
-        seen = @inbounds dist.seens[i]
-        h ∈ seen && return true
-        push!(seen, h)
-    end
-    false
-end
-
 struct RingsEndingAt{T}
     dag::Vector{JunctionNode}
     midnode::Int
@@ -456,7 +482,7 @@ many more cycles that may not be rings.
     RingsEndingAt{typeof(record)}(dag, midnode, parents.heads, parents.lastshort % Int, parents.num, record)
 end
 Base.IteratorSize(::RingsEndingAt) = Base.SizeUnknown()
-Base.eltype(::RingsEndingAt) = Vector{Int}
+Base.eltype(::Type{RingsEndingAt{T}}) where T = Vector{Int}
 
 function Base.iterate(x::RingsEndingAt, state=nothing)
     heads = x.heads
@@ -520,72 +546,6 @@ function Base.iterate(x::RingsEndingAt, state=nothing)
         i1 -= 1
     end
     nothing
-end
-
-function bfs_smaller!(dist, i, j, start, stop)
-    Q = dist.Q_lists[i]
-    graph = dist.g
-    counter = start
-    encountered = false
-    n = nv(graph)
-    for (u, d) in Iterators.rest(Q, start)
-        (encountered || d+one(SmallIntType) ≥ stop) && break
-        counter += 1
-        for x in neighbors(graph, u)
-            h = hash_position(x, n)
-            has_been_seen!(dist, i, h) && continue
-            push!(Q, (x, d+1))
-            set_distance!(dist, i, h, d+one(SmallIntType))
-            encountered |= h == j
-        end
-    end
-    dist.first_indices[i] = counter
-    if !encountered
-        set_distance!(dist, i, j, stop)
-        return false
-    end
-    return true
-end
-
-function _reorderinit(first_indices, verti, vertj::PeriodicVertex{D}) where D
-    n = length(first_indices)
-    counterij = (first_indices[verti.v], first_indices[vertj.v])
-    if counterij[1] < counterij[2]
-        return vertj.v, hash_position(PeriodicVertex{D}(verti.v, verti.ofs .- vertj.ofs), n), counterij[2]
-    end
-    return verti.v, hash_position(PeriodicVertex{D}(vertj.v, vertj.ofs .- verti.ofs), n), counterij[1]
-end
-
-function init_distance_record!(dist, i, j)
-    dist.first_indices[i] = 1
-    g = dist.g
-    dist.Q_lists[i] = [(x, one(SmallIntType)) for x in neighbors(g, i)]
-    _seen = Set{Int}(i)
-    encountered = false
-    n = nv(g)
-    for x in neighbors(g, i)
-        _h = hash_position(x, n)
-        set_distance!(dist, i, _h, one(SmallIntType))
-        if _h ≤ (@inbounds size(dist.seenshort)[2])
-            dist.seenshort[i,_h] = true
-        else
-            push!(_seen, _h)
-        end
-        encountered |= _h == j
-    end
-    dist.seens[i] = _seen
-    encountered
-end
-
-function is_distance_smaller!(dist, verti, vertj, stop)
-    i, j, start = _reorderinit(dist.first_indices, verti, vertj)
-    known = known_distance(dist, i, j)
-    iszero(known) || return known < stop
-    if start == 0
-        init_distance_record!(dist, i, j) && return one(stop) < stop
-        start = 1
-    end
-    return bfs_smaller!(dist, i, j, start, stop)
 end
 
 """
@@ -653,7 +613,6 @@ function rings_around(g::PeriodicGraph{D}, i, depth=15, dist::DistanceRecord=Dis
     n = nv(g)
     ringavoid, cycleavoid = dist isa Nothing ? (nothing, visited) : (visited, nothing)
     dag, vertexnums = arcs_list(g, i, depth, ringavoid, cycleavoid)
-    # dag, vertexnums = arcs_list_minimal(g, i, depth)
     hashes = [hash_position(x, n) for x in vertexnums]
     ret = Vector{Int}[]
     for midnode in length(dag):-1:2
@@ -986,30 +945,30 @@ function gaussian_elimination!(gauss::IterativeGaussianElimination, r::Vector{In
     true, false
 end
 
-function retrieve_vcycle(ecycle, known_pairs)
-    fst_pair = known_pairs[ecycle[1]]
-    last_pair = known_pairs[ecycle[end]]
-    last_v, other_v = fst_pair[1], fst_pair[2]
-    if last_v == last_pair[1] || last_v == last_pair[2]
-        last_v = fst_pair[2]
-        other_v = fst_pair[1]
-    end
-    n = length(ecycle)
-    ret = Vector{typeof(last_v)}(undef, n)
-    ret[1] = last_v
-    ret[n] = other_v
-    for j in 2:(n-1)
-        this_pair = known_pairs[ecycle[j]]
-        other_v = this_pair[1]
-        if last_v == other_v
-            last_v = this_pair[2]
-        else
-            last_v = other_v
-        end
-        ret[j] = last_v
-    end
-    return ret
-end
+# function retrieve_vcycle(ecycle, known_pairs)
+#     fst_pair = known_pairs[ecycle[1]]
+#     last_pair = known_pairs[ecycle[end]]
+#     last_v, other_v = fst_pair[1], fst_pair[2]
+#     if last_v == last_pair[1] || last_v == last_pair[2]
+#         last_v = fst_pair[2]
+#         other_v = fst_pair[1]
+#     end
+#     n = length(ecycle)
+#     ret = Vector{typeof(last_v)}(undef, n)
+#     ret[1] = last_v
+#     ret[n] = other_v
+#     for j in 2:(n-1)
+#         this_pair = known_pairs[ecycle[j]]
+#         other_v = this_pair[1]
+#         if last_v == other_v
+#             last_v = this_pair[2]
+#         else
+#             last_v = other_v
+#         end
+#         ret[j] = last_v
+#     end
+#     return ret
+# end
 
 function strong_rings(rs::Vector{Vector{Int}}, g::PeriodicGraph{D}, depth=15) where D
     known_pairs = Tuple{PeriodicVertex{D},PeriodicVertex{D}}[]
