@@ -329,3 +329,7 @@ function show(io::IO, l::PeriodicNeighborList{D}) where D
     join(IOContext(io, :typeinfo => PeriodicVertex{D}), l, ", ")
     print(io, ']')
 end
+
+function reverse_hash_position(hash::Integer, g::PeriodicGraph{D}) where D
+    reverse_hash_position(hash, nv(g), Val(D))
+end

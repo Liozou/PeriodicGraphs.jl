@@ -728,6 +728,8 @@ end
 
 # copied from PeriodicGraphEmbeddings.jl
 
+using StaticArrays
+
 struct PeriodicSymmetry3D{T} <: PeriodicGraphs.AbstractSymmetry
     vmap::SubArray{PeriodicVertex3D,1,Matrix{PeriodicVertex3D},Tuple{Base.Slice{Base.OneTo{Int}},Int},true}
     rotation::SMatrix{3,3,Int,9}
@@ -771,3 +773,29 @@ const symmetries_lta = SymmetryGroup3D{Rational{Int32}}(
     true
 )
 
+# utility to compare RingIncluding
+function canonicalize_ri(ri::PeriodicGraphs.RingIncluding{D}) where D
+    ret = [PeriodicVertex{D}[] for _ in 1:length(ri)]
+    for i in 1:length(ri)
+        cycle = collect(ri[i])
+        fst = argmin(cycle)
+        lenc = length(cycle)
+        endreverse = cycle[mod1(fst-1, lenc)] > cycle[mod1(fst+1, lenc)]
+        if fst != 1 || !endreverse
+            reverse!(cycle, 1, fst - endreverse)
+            reverse!(cycle, fst - endreverse + 1, lenc)
+            endreverse && reverse!(cycle)
+        end
+        ret[i] = cycle
+    end
+    return sort!(ret)
+end
+
+@testset "Symmetry and rings" begin
+    ras = RingAttributions(lta, true, 10)
+    rasym = RingAttributions(lta, true, 10, symmetries_lta)
+    @test length(ras) == length(rasym)
+    for (r1, r2) in zip(ras, rasym)
+        @test canonicalize_ri(r1) == canonicalize_ri(r2)
+    end
+end
