@@ -110,8 +110,7 @@ function reverse_hash_position(x::Integer, ::Val{3})
     n = floor(Int, cbrt(x))
     zn = NtoZ(n)
     n2 = n^2
-    n3 = n*n2
-    y = x - n3
+    y = x - n*n2
     if y ≤ 2n+n2
         x2, x3 = divrem(y, n+1)
         return SVector{3,Int}(zn, NtoZ(x2), NtoZ(x3))
@@ -132,7 +131,7 @@ function reverse_hash_position(x::Integer, ::Val{2})
     n = floor(Int, sqrt(x))
     zn = NtoZ(n)
     n2 = n^2
-    if x ≤ n^2 + n
+    if x ≤ n2 + n
         return SVector{2,Int}(zn, NtoZ(x - n2))
     end
     return SVector{2,Int}(NtoZ(x - 1 - n2 - n), zn)

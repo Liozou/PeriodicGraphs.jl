@@ -70,32 +70,32 @@ end
 (::NoSymmetryGroup)(i::Integer) = i
 Base.unique(x::NoSymmetryGroup) = Base.OneTo(x.num)
 Base.iterate(::NoSymmetryGroup) = nothing
-Base.eltype(::Type{NoSymmetryGroup}) = PeriodicSymmetry{0}
+Base.eltype(::Type{NoSymmetryGroup}) = TrivialIdentitySymmetry
 Base.length(::NoSymmetryGroup) = 0
 Base.one(::NoSymmetryGroup) = TrivialIdentitySymmetry()
 
 """
-    IncludingIdentity{T<:AbstractSymmetryGroup} <: AbstractSymmetryGroup
+    IncludingIdentity{S<:AbstractSymmetry,T<:AbstractSymmetryGroup{S}} <: AbstractSymmetryGroup{S}
 
 Wrapper around an `AbstractSymmetry` that explicitly includes the identity operation.
 """
 struct IncludingIdentity{S<:AbstractSymmetry,T<:AbstractSymmetryGroup{S}} <: AbstractSymmetryGroup{S}
     symm::T
-    IncludingIdentity{T}(symm::AbstractSymmetryGroup{S}) where {S,T} = IncludingIdentity{S,T}(symm)
+    IncludingIdentity{S,T}(symm) where {S,T} = new{S,T}(symm) # for incremental compilation
 end
-IncludingIdentity(s::T) where {T<:AbstractSymmetryGroup} = IncludingIdentity{T}(s)
+IncludingIdentity(s::T) where {T<:AbstractSymmetryGroup} = IncludingIdentity{eltype(T),T}(s)
 IncludingIdentity(s::IncludingIdentity) = s
 
 (s::IncludingIdentity)(i::Integer) = (s.symm)(i)
 Base.unique(s::IncludingIdentity) = unique(s.symm)
 Base.iterate(s::IncludingIdentity) = (one(s.symm), nothing)
-function Base.iterate(s::IncludingIdentity{T}, state) where T
+function Base.iterate(s::IncludingIdentity, state)
     x = state isa Nothing ? iterate(s.symm) : iterate(s.symm, something(state))
     x isa Nothing && return nothing
     a, b = x
     return a, Some(b)
 end
-Base.eltype(::Type{IncludingIdentity{T}}) where {T} = eltype(T)
+Base.eltype(::Type{IncludingIdentity{S,T}}) where {S,T} = S
 Base.length(s::IncludingIdentity) = 1 + length(s.symm)
 function Base.getindex(s::IncludingIdentity, i::Integer)
     i == 1 && return one(s.symm)
