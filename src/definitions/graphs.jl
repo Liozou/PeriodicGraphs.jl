@@ -95,12 +95,7 @@ function from_edges(nv, t::AbstractVector{PeriodicEdge{N}}) where {N}
 end
 
 function from_edges(t::AbstractVector{PeriodicEdge{N}}) where N
-    @static if VERSION < v"1.6-"
-        isempty(t) && return from_edges(0, t)
-        return from_edges(maximum(max(e.src, e.dst.v) for e in t), t)
-    else
-        return from_edges(maximum(max(e.src, e.dst.v) for e in t; init=0), t)
-    end
+    from_edges(maximum(max(e.src, e.dst.v) for e in t; init=0), t)
 end
 
 """
@@ -138,12 +133,7 @@ end
 
 PeriodicGraph(nv::Integer, t::AbstractVector{PeriodicEdge{N}}) where {N} = PeriodicGraph{N}(nv, t)
 function PeriodicGraph{N}(t::AbstractVector{PeriodicEdge{N}}) where N
-    @static if VERSION < v"1.6-"
-        isempty(t) && return PeriodicGraph{N}(0, t)
-        return PeriodicGraph{N}(maximum(max(e.src, e.dst.v) for e in t), t)
-    else
-        return PeriodicGraph{N}(maximum(max(e.src, e.dst.v) for e in t; init=0), t)
-    end
+    PeriodicGraph{N}(maximum(max(e.src, e.dst.v) for e in t; init=0), t)
 end
 PeriodicGraph(t::AbstractVector{PeriodicEdge{N}}) where {N} = PeriodicGraph{N}(t)
 
