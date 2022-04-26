@@ -25,7 +25,7 @@ ConstMiniBitSet(l::AbstractVector{<:Integer}) = ConstMiniBitSet{UInt64}(l)
 push(x::ConstMiniBitSet{T}, i::Integer) where {T} = _constminibitset(x.x | (one(T) << (i % UInt8)))
 Base.union(x::ConstMiniBitSet, y::ConstMiniBitSet) = _constminibitset(x.x | y.x)
 Base.intersect(x::ConstMiniBitSet, y::ConstMiniBitSet) = _constminibitset(x.x & y.x)
-Base.in(x::ConstMiniBitSet{T}, i::Integer) where {T} = ((x.x >> (i % UInt8)) & one(T)) % Bool
+Base.in(i::Integer, x::ConstMiniBitSet{T}) where {T} = ((x.x >> (i % UInt8)) & one(T)) % Bool
 Base.setdiff(x::ConstMiniBitSet, y::ConstMiniBitSet) = _constminibitset(x.x & ~y.x)
 Base.symdiff(x::ConstMiniBitSet, y::ConstMiniBitSet) = _constminibitset(x.x ⊻ y.x)
 Base.length(x::ConstMiniBitSet) = count_ones(x.x)
@@ -67,7 +67,6 @@ struct JunctionNode
 end
 JunctionNode() = JunctionNode(Int[], -one(SmallIntType), ConstMiniBitSet{UInt32}())
 JunctionNode(head::Integer, num, roots::ConstMiniBitSet) = JunctionNode(Int[head], num, roots)
-JunctionNode(num::Integer, ::Nothing) = JunctionNode(Int[], num, ConstMiniBitSet{UInt32}())
 JunctionNode(root::Integer) = JunctionNode(1, zero(SmallIntType), ConstMiniBitSet{UInt32}(root))
 
 function Base.show(io::IO, x::JunctionNode)
@@ -1039,7 +1038,7 @@ Base.length(ras::RingAttributions) = length(ras.attrs)
 Base.eltype(::Type{RingAttributions{D}}) where {D} = RingIncluding{D}
 
 function Base.show(io::IO, ras::RingAttributions)
-    println(io, typeof(ras), "(rings per node:", length.(ras.attrs), ')')
+    println(io, typeof(ras), "(rings per node: ", length.(ras.attrs), ')')
 end
 
 struct RingIncluding{D}
@@ -1053,7 +1052,7 @@ function Base.getindex(ri::RingIncluding{D}, j::Integer) where {D}
     return PeriodicNeighborList{D}(.-ofs, newring)
 end
 Base.length(ri::RingIncluding) = length(ri.ras.attrs[ri.i])
-Base.eltype(::Type{RingIncluding{D}}) where {D} = PeriodicNeighborList
+Base.eltype(::Type{RingIncluding{D}}) where {D} = PeriodicNeighborList{D}
 
 function Base.iterate(r::Union{RingAttributions,RingIncluding}, state=1)
     (state % UInt) - 1 < length(r) ? ((@inbounds r[state]), state+1) : nothing
