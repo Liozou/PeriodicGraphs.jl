@@ -628,7 +628,7 @@ end
 
 
 """
-    no_neighboring_nodes(g, symmetries::AbstractSymmetryGroup)
+    no_neighboring_nodes(g, symmetries::AbstractGraphSymmetryGroup)
 
 Return a list of nodes representatives (modulo symmetries) such that all the vertices in
 `g` either have their representative in the list or are surrounded by nodes whose
@@ -637,7 +637,7 @@ representatives are in the list.
 This means that all cycles and rings of `g` have at least one node whose representative is
 in the list.
 """
-function no_neighboring_nodes(g, symmetries::AbstractSymmetryGroup)
+function no_neighboring_nodes(g, symmetries::AbstractGraphSymmetryGroup)
     n = nv(g)
     # category: 0 => unvisited, 1 => to explore, 2 => unvisited unknown, 3 => not to explore
     categories = zeros(Int8, n)
@@ -684,7 +684,7 @@ end
 
 
 """
-    rings(g::PeriodicGraph{D}, depth=15, symmetries::AbstractSymmetryGroup=NoSymmetryGroup(g), dist::DistanceRecord=DistanceRecord(g,depth)) where D
+    rings(g::PeriodicGraph{D}, depth=15, symmetries::AbstractGraphSymmetryGroup=NoSymmetryGroup(g), dist::DistanceRecord=DistanceRecord(g,depth)) where D
 
 Compute the list of rings in `g`, up to length `2*depth+3`.
 
@@ -693,13 +693,13 @@ between two vertices of the cycle that is shorter than either path connecting th
 in the cycle.
 
 If provided, `symmetries` should represent the symmetries of the graph as a
-`AbstractSymmetryGroup` object respecting its documented interface.
+`AbstractGraphSymmetryGroup` object respecting its documented interface.
 
 A `DistanceRecord` `dist` can be optionally provided to track the distances between pairs
 of vertices in the graph.
 
 """
-function rings(g::PeriodicGraph{D}, depth=15, symmetries::AbstractSymmetryGroup=NoSymmetryGroup(g), dist::DistanceRecord=DistanceRecord(g,depth)) where D
+function rings(g::PeriodicGraph{D}, depth=15, symmetries::AbstractGraphSymmetryGroup=NoSymmetryGroup(g), dist::DistanceRecord=DistanceRecord(g,depth)) where D
     toexplore = sort!(no_neighboring_nodes(g, symmetries))
     ret = Vector{Int}[]
     visited = falses(nv(g))
@@ -992,7 +992,7 @@ function strong_rings(rs::Vector{Vector{Int}}, g::PeriodicGraph{D}, depth=15) wh
 end
 
 """
-    strong_rings(g::PeriodicGraph{D}, depth=15, symmetries::AbstractSymmetryGroup=NoSymmetryGroup(g), dist::DistanceRecord=DistanceRecord(g,depth)) where D
+    strong_rings(g::PeriodicGraph{D}, depth=15, symmetries::AbstractGraphSymmetryGroup=NoSymmetryGroup(g), dist::DistanceRecord=DistanceRecord(g,depth)) where D
 
 Compute the list of strong rings in `g`, up to length `2*depth+3`. See [`rings`](@ref) for
 the meaning of the other arguments.
@@ -1001,7 +1001,7 @@ A strong ring is a cycle of the graph which cannot be decomposed into a sum of a
 of smaller cycles. By comparison, a ring is a cycle which cannot be decomposed into a sum
 of two smaller cycles. In particular, all strong rings are rings.
 """
-function strong_rings(g::PeriodicGraph, depth=15, symmetries::AbstractSymmetryGroup=NoSymmetryGroup(g), dist::DistanceRecord=DistanceRecord(g,depth))
+function strong_rings(g::PeriodicGraph, depth=15, symmetries::AbstractGraphSymmetryGroup=NoSymmetryGroup(g), dist::DistanceRecord=DistanceRecord(g,depth))
     rs = rings(g, depth, symmetries, dist)
     return strong_rings(rs, g, depth)
 end
@@ -1025,7 +1025,7 @@ struct RingAttributions{D}
     end
 end
 
-function RingAttributions(g::PeriodicGraph{D}, strong=false, depth=15, symmetries::AbstractSymmetryGroup=NoSymmetryGroup(g), dist::DistanceRecord=DistanceRecord(g,depth)) where D
+function RingAttributions(g::PeriodicGraph{D}, strong=false, depth=15, symmetries::AbstractGraphSymmetryGroup=NoSymmetryGroup(g), dist::DistanceRecord=DistanceRecord(g,depth)) where D
     rs = (strong ? strong_rings : rings)(g, depth, symmetries, dist)
     return RingAttributions{D}(nv(g), rs)
 end

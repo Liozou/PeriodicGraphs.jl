@@ -12,7 +12,7 @@ function _precompile_()
     end
 
     # Symmetries
-    @enforce Base.precompile(Tuple{Type{TrivialIdentitySymmetry}})
+    @enforce Base.precompile(Tuple{Type{IdentityGraphSymmetry}})
     @enforce Base.precompile(Tuple{NoSymmetryGroup, Int})
     @enforce Base.precompile(Tuple{typeof(unique),NoSymmetryGroup})
     @enforce Base.precompile(Tuple{typeof(iterate),NoSymmetryGroup})

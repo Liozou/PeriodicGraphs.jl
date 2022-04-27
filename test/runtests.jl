@@ -764,22 +764,22 @@ module PeriodicSymmetries
 # copied from PeriodicGraphEmbeddings.jl
     using PeriodicGraphs, Graphs, StaticArrays
 
-    struct PeriodicSymmetry3D{T} <: PeriodicGraphs.AbstractSymmetry
+    struct PeriodicGraphSymmetry3D{T} <: PeriodicGraphs.AbstractGraphSymmetry
         vmap::SubArray{PeriodicVertex3D,1,Matrix{PeriodicVertex3D},Tuple{Base.Slice{Base.OneTo{Int}},Int},true}
         rotation::SMatrix{3,3,Int,9}
         translation::SVector{3,T}
     end
-    Base.getindex(symm::PeriodicSymmetry3D, i::Integer) = symm.vmap[i].v
-    function Base.getindex(symm::PeriodicSymmetry3D, x::PeriodicVertex3D)
+    Base.getindex(symm::PeriodicGraphSymmetry3D, i::Integer) = symm.vmap[i].v
+    function Base.getindex(symm::PeriodicGraphSymmetry3D, x::PeriodicVertex3D)
         dst = symm.vmap[x.v]
         _ofs = muladd(symm.rotation, x.ofs, dst.ofs)
         PeriodicVertex3D(dst.v, _ofs)
     end
-    function Base.isequal(x::PeriodicSymmetry3D{T}, y::PeriodicSymmetry3D{T}) where T
+    function Base.isequal(x::PeriodicGraphSymmetry3D{T}, y::PeriodicGraphSymmetry3D{T}) where T
         x.vmap == y.vmap && x.rotation == y.rotation && x.translation == y.translation
     end
 
-    struct SymmetryGroup3D{T} <: PeriodicGraphs.AbstractSymmetryGroup{PeriodicSymmetry3D{T}}
+    struct SymmetryGroup3D{T} <: PeriodicGraphs.AbstractGraphSymmetryGroup{PeriodicGraphSymmetry3D{T}}
         vmaps::Matrix{PeriodicVertex3D}
         rotations::Vector{SMatrix{3,3,Int,9}}
         translations::Vector{SVector{3,T}}
@@ -791,14 +791,14 @@ module PeriodicSymmetries
     (s::SymmetryGroup3D)(i::Integer) = s.uniques[s.uniquemap[i]]
     Base.unique(s::SymmetryGroup3D) = s.uniques
     function Base.getindex(s::SymmetryGroup3D{T}, i::Integer) where {T}
-        PeriodicSymmetry3D{T}((@view s.vmaps[:,i]), s.rotations[i], s.translations[i])
+        PeriodicGraphSymmetry3D{T}((@view s.vmaps[:,i]), s.rotations[i], s.translations[i])
     end
     Base.iterate(s::SymmetryGroup3D, state=1) = state > length(s) ? nothing : (s[state], state+1)
-    Base.eltype(::Type{SymmetryGroup3D{T}}) where {T} = PeriodicSymmetry3D{T}
+    Base.eltype(::Type{SymmetryGroup3D{T}}) where {T} = PeriodicGraphSymmetry3D{T}
     Base.length(s::SymmetryGroup3D) = length(s.rotations)
     function Base.one(s::SymmetryGroup3D{T}) where T
         n = length(s.uniquemap)
-        PeriodicSymmetry3D{T}((@view reshape(collect(PeriodicVertex3D.(Base.OneTo(n))), n, 1)[:,1]),
+        PeriodicGraphSymmetry3D{T}((@view reshape(collect(PeriodicVertex3D.(Base.OneTo(n))), n, 1)[:,1]),
                             one(SMatrix{3,3,Int,9}), zero(SVector{3,T}))
     end
 
@@ -839,7 +839,7 @@ end
         @test canonicalize_ri(r1) == canonicalize_ri(r2)
     end
     withid = PeriodicGraphs.IncludingIdentity(symmetries_lta)
-    @test eltype(withid) == PeriodicSymmetries.PeriodicSymmetry3D{Rational{Int32}}
+    @test eltype(withid) == PeriodicSymmetries.PeriodicGraphSymmetry3D{Rational{Int32}}
     @test length(withid) == 48
     id, id2 = withid
     @test isequal(id, withid[1]) && isequal(id, one(symmetries_lta))
@@ -851,6 +851,8 @@ end
     @test PeriodicGraphs.IncludingIdentity(trivsymmgroup) === trivsymmgroup
     @test_throws ErrorException one(trivsymmgroup)
     triv = only(trivsymmgroup)
+    @test eltype(trivsymmgroup) == IdentityGraphSymmetry
     @test triv[5] == 5
     @test triv[PeriodicVertex3D(14)] == PeriodicVertex3D(14)
+    @test triv([1, 2, 4]) == [1, 2, 4]
 end
