@@ -120,10 +120,7 @@ function Base.parse(::Type{PeriodicGraph}, s::AbstractString)
 end
 
 function show(io::IO, g::PeriodicGraph{N}) where N
-    if get(io, :typeinfo, Any) != PeriodicGraph{N}
-        print(io, PeriodicGraph{N})
-    end
-    print(io, '(', nv(g), ',', ' ', collect(edges(g)), ')')
+    print(io, PeriodicGraph{N}, '(', nv(g), ',', ' ', collect(edges(g)), ')')
 end
 function print(io::IO, g::PeriodicGraph{N}) where N
     print(io, N)
