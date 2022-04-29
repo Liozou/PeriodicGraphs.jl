@@ -548,21 +548,22 @@ function Base.iterate(x::RingsEndingAt, state=nothing)
 end
 
 """
-    normalize_cycle!(cycle::Vector{Int}, g::PeriodicGraph)
+    normalize_cycle!(cycle::Vector{Int}, n, v::Val{D}) where D
 
 In-place rotate and possibly reverse `cycle`, a `Vector{Int}` whose elements are the
 `hash_position` of vertices of `g` so that the result is the same for all such vectors that
 represent the same cycle, possibly translated to a different unit cell or rotated.
+
+The graph `g::PeriodicGraph{D}` is represented as `n = nv(g)` and `v = Val(D)`
 """
-function normalize_cycle!(cycle::Vector{Int}, g::PeriodicGraph{D}) where D
-    n = nv(g)
+function normalize_cycle!(cycle::Vector{Int}, n, v::Val{D}) where D
     minval, fst = findmin(x -> mod1(x, n), cycle)
-    ofsfst = reverse_hash_position(fld1(cycle[fst], n) - 1, Val(D))
+    ofsfst = reverse_hash_position(fld1(cycle[fst], n) - 1, v)
     lenc = length(cycle)
     for i in fst+1:lenc
         _f, _m = fldmod1(cycle[i], n)
         _m == minval || continue
-        ofs = reverse_hash_position(_f - 1, Val(D))
+        ofs = reverse_hash_position(_f - 1, v)
         if ofs < ofsfst
             ofsfst = ofs
             fst = i
@@ -571,7 +572,7 @@ function normalize_cycle!(cycle::Vector{Int}, g::PeriodicGraph{D}) where D
     before_f, before_m = fldmod1(cycle[mod1(fst-1, lenc)], n)
     after_f, after_m = fldmod1(cycle[mod1(fst+1, lenc)], n)
     endreverse = before_m > after_m ||
-                 (before_m == after_m && reverse_hash_position(before_f, Val(D)) > reverse_hash_position(after_f, Val(D)))
+                 (before_m == after_m && reverse_hash_position(before_f, v) > reverse_hash_position(after_f, v))
     if fst != 1 || !endreverse
         reverse!(cycle, 1, fst - endreverse)
         reverse!(cycle, fst - endreverse + 1, lenc)
@@ -579,7 +580,7 @@ function normalize_cycle!(cycle::Vector{Int}, g::PeriodicGraph{D}) where D
     end
     if !iszero(ofsfst)
         for i in 1:lenc
-            rev = reverse_hash_position(cycle[i], g)
+            rev = reverse_hash_position(cycle[i], n, v)
             cycle[i] = hash_position(PeriodicVertex{D}(rev.v, rev.ofs .- ofsfst), n)
         end
     end
@@ -617,7 +618,7 @@ function rings_around(g::PeriodicGraph{D}, i, depth=15, dist::DistanceRecord=Dis
     for midnode in length(dag):-1:2
         for cycle in RingsEndingAt(dag, midnode, (dist, vertexnums))
         # for cycle in cycles_ending_at(dag, midnode, dist, vertexnums)
-            newcycle = normalize_cycle!(hashes[cycle], g)
+            newcycle = normalize_cycle!(hashes[cycle], n, Val(D))
             push!(ret, newcycle)
         end
     end
@@ -683,10 +684,43 @@ function no_neighboring_nodes(g, symmetries::AbstractSymmetryGroup)
 end
 
 
+struct RingSymmetry{D,S<:AbstractSymmetry} <: AbstractSymmetry
+    symm::S
+    nvg::Int
+end
+function Base.getindex(rs::RingSymmetry{D}, ring::Vector{Int}) where D
+    buffer = [hash_position(rs.symm[reverse_hash_position(r, rs.nvg, Val(D))], rs.nvg) for r in ring]
+    normalize_cycle!(buffer, rs.nvg, Val(D))
+end
+
+struct RingSymmetryGroup{D,S,T<:AbstractSymmetryGroup{S},U} <: AbstractSymmetryGroup{RingSymmetry{D,S}}
+    dict::Dict{Vector{Int},Int}
+    uniques::U
+    nvg::Int
+    symms::T
+    v::Val{D}
+    function RingSymmetryGroup{D}(dict, uniques::U, nvg, symms::T) where {D,U,T<:AbstractSymmetryGroup}
+        new{D,eltype(T),T,U}(dict, uniques, nvg, symms, Val(D))
+    end
+end
+
+(rsg::RingSymmetryGroup)(x::AbstractVector{Int}) = rsg.dict[x]
+Base.unique(rsg::RingSymmetryGroup) = rsg.uniques
+function Base.iterate(rsg::RingSymmetryGroup{D,S}, state=nothing) where {D,S}
+    x = state isa Nothing ? iterate(rsg.symms) : iterate(rsg.symms, something(state))
+    x isa Nothing && return nothing
+    symm, b = x
+    return RingSymmetry{D,S}(symm, rsg.nvg), Some(b)
+end
+Base.length(rsg::RingSymmetryGroup) = length(rsg.symms)
+Base.one(rsg::RingSymmetryGroup{D,S}) where {D,S} = RingSymmetry{D,S}(one(rsg.symms), rsg.nvg)
+
 """
     rings(g::PeriodicGraph{D}, depth=15, symmetries::AbstractSymmetryGroup=NoSymmetryGroup(g), dist::DistanceRecord=DistanceRecord(g,depth)) where D
 
-Compute the list of rings in `g`, up to length `2*depth+3`.
+Compute the list of rings in `g`, up to length `2*depth+3`. Return the list of `Vector{Int}`
+where each sublist is a ring whose vertices are the `reverse_hash_position`s of the sublist
+elements. Also return an `AbstractSymmetryGroup` acting on the returned rings.
 
 A ring is a cycle of the graph for which there is no shortcut, i.e. no path in the graph
 between two vertices of the cycle that is shorter than either path connecting the vertices
@@ -697,7 +731,6 @@ If provided, `symmetries` should represent the symmetries of the graph as a
 
 A `DistanceRecord` `dist` can be optionally provided to track the distances between pairs
 of vertices in the graph.
-
 """
 function rings(g::PeriodicGraph{D}, depth=15, symmetries::AbstractSymmetryGroup=NoSymmetryGroup(g), dist::DistanceRecord=DistanceRecord(g,depth)) where D
     toexplore = sort!(no_neighboring_nodes(g, symmetries))
@@ -711,28 +744,33 @@ function rings(g::PeriodicGraph{D}, depth=15, symmetries::AbstractSymmetryGroup=
             visited[symm[x]] = true
         end
     end
-    symmetries isa NoSymmetryGroup && return ret
+    symmetries isa NoSymmetryGroup && return ret, NoSymmetryGroup(length(ret))
     sort!(ret; by=length, rev=true) # to avoid resizing the buffer below too many times
     buffer = similar(first(ret))
     n = nv(g)
     uniquerings = [[reverse_hash_position(x, g) for x in r] for r in ret]
-    ringset = Set{Vector{Int}}(ret)
-    for symm in symmetries
-        for ring in uniquerings
-            nr = length(ring)
-            resize!(buffer, nr)
+    ringdict = Dict{Vector{Int},Int}()
+    symmuniques = Int[]
+    for (idx, ring) in enumerate(uniquerings)
+        nr = length(ring)
+        resize!(buffer, nr)
+        newidx = get!(ringdict, ret[idx], idx)
+        if newidx == idx
+            push!(symmuniques, idx)
+        end
+        for symm in symmetries
             #=@inbounds=# for i in 1:nr
                 buffer[i] = hash_position(symm[ring[i]], n)
             end
-            normalize_cycle!(buffer, g)
-            if buffer ∉ ringset
+            normalize_cycle!(buffer, n, Val(D))
+            if !haskey(ringdict, buffer)
                 cp = copy(buffer)
                 push!(ret, cp)
-                push!(ringset, cp)
+                ringdict[cp] = newidx
             end
         end
     end
-    return ret
+    return ret, RingSymmetryGroup{D}(ringdict, symmuniques, n, symmetries)
 end
 
 # cycles(g::PeriodicGraph, depth=15, symmetries=NoSymmetryGroup(g)) = rings(g, depth, symmetries, nothing)
@@ -784,7 +822,28 @@ function unique_order(cycles)
     return J
 end
 
-function sort_cycles(rs, known_pairs, known_pairs_dict, g::PeriodicGraph{D}, depth) where D
+
+function prepare_known_pairs(g::PeriodicGraph{D}) where D
+    known_pairs = Tuple{PeriodicVertex{D},PeriodicVertex{D}}[]
+    known_pairs_dict = Dict{Tuple{PeriodicVertex{D},PeriodicVertex{D}},Int}()
+    hintsize = 3^D*ne(g)^2
+    sizehint!(known_pairs, hintsize)
+    sizehint!(known_pairs_dict, hintsize)
+    return (known_pairs, known_pairs_dict)
+end
+
+"""
+    sort_cycles(g::PeriodicGraph{D}, rs, depth=maximum(length, rs), (known_pairs, known_pairs_dict)=prepare_known_pairs(g)) where D
+
+Given a list `rs` of rings of `g` with at least one vertex in the origin unit cell, return
+a list of edge-rings that cross a unit cell up to distance 2 from the origin, as well as
+the indices of the corresponding rings in `rs`.
+
+An edge-ring is a `Vector{Int}` where each element is the index of a pair of
+`PeriodicVertex{D}` stored `known_pairs`, representing an edge between the two vertices.
+Two consecutive edges in an edge-ring must share exactly one of their two vertices.
+"""
+function sort_cycles(g::PeriodicGraph{D}, rs, depth=maximum(length, rs), (known_pairs, known_pairs_dict)=prepare_known_pairs(g)) where D
     ofss = cages_around(g, 2)
     tot_ofss = length(ofss)
     cycles = Vector{Vector{Int}}(undef, tot_ofss * length(rs))
@@ -815,18 +874,34 @@ function sort_cycles(rs, known_pairs, known_pairs_dict, g::PeriodicGraph{D}, dep
 end
 
 # Complexity O(len(a) + len(b))
-function symdiff_cycles(a::Vector{Int}, b::Vector{Int})
+function symdiff_cycles!(c::Vector{Int}, a::Vector{Int}, b::Vector{Int})
     lenb = length(b)
     lena = length(a)
-    c = Vector{Int}(undef, lenb + lena)
-    counter_b = 1
-    y = lenb == 0 ? typemax(Int) : (@inbounds b[1])
-    i = 0
+    if lena < lenb
+        a, b = b, a
+        lena, lenb = lenb, lena
+    end
+    counter_a = 0
+    @inbounds while true
+        if lenb == counter_a
+            newlenc = (lena - counter_a) % UInt
+            resize!(c, newlenc)
+            unsafe_copyto!(c, 1, a, counter_a+1, newlenc)
+            return c
+        end
+        counter_a += 1
+        a[counter_a] == b[counter_a] || break
+    end
+    counter_a -= 1
+    newlen = lenb + lena - counter_a
+    length(c) < newlen && resize!(c, newlen)
+    counter_b = counter_a + 1
+    y = lenb == 0 ? typemax(Int) : (@inbounds b[1+counter_a])
     j = 1
     n = length(a)
-    @inbounds while i < n
-        i += 1
-        x = a[i]
+    @inbounds while counter_a < n
+        counter_a += 1
+        x = a[counter_a]
         while y < x
             c[j] = y
             j += 1
@@ -837,7 +912,7 @@ function symdiff_cycles(a::Vector{Int}, b::Vector{Int})
         if y == x
             counter_b += 1
             if counter_b > lenb
-                i += 1
+                counter_a += 1
                 @goto fillwitha
             end
             y = b[counter_b]
@@ -852,25 +927,27 @@ function symdiff_cycles(a::Vector{Int}, b::Vector{Int})
     return c
 
     @label fillwitha
-    remaining_towritea = lena - i + 1
-    remaining_towritea > 0 && unsafe_copyto!(c, j, a, i, remaining_towritea)
+    remaining_towritea = lena - counter_a + 1
+    remaining_towritea > 0 && unsafe_copyto!(c, j, a, counter_a, remaining_towritea)
     @inbounds resize!(c, (j + remaining_towritea - 1) % UInt)
     return c
 end
+symdiff_cycles(a, b) = symdiff_cycles!(Vector{Int}(undef, length(b) + length(a) - 1), a, b)
 
 
 struct IterativeGaussianElimination
     rings::Vector{Vector{Int}} # The rows of the matrix, in sparse format
-    lengths::Vector{Int} # For each row, the length of the corresponding ring
-    next::Vector{Int} # Order of the rings (linked list compact format)
-    previous::Vector{Int} # verifies previous[next[i+1]] == i
-    shortcuts::Vector{Int} # verifies shortcuts[i] = 0 || rings[shortcuts[i]][1] == i
+    lengths::Vector{Int}
+    shortcuts::Vector{Int32} # verifies shortcuts[i] = 0 || rings[shortcuts[i]][1] == i
+    buffer1::Vector{Int}
+    buffer2::Vector{Int}
 end
 function IterativeGaussianElimination(ring::Vector{Int}, sizehint=ring[1])
     r1 = ring[1]
     shortcuts = zeros(Int, sizehint)
     shortcuts[r1] = 1
-    IterativeGaussianElimination([ring], [length(ring)], [1,0], [0], shortcuts)
+    buffer = Vector{Int}(undef, length(r1))
+    IterativeGaussianElimination([ring], [length(ring)], shortcuts, buffer, similar(buffer))
 end
 
 # For an IterativeGaussianElimination of i rings of size at most l, symdiff_cycles cost at
@@ -880,68 +957,41 @@ end
 # The reasonning can probably be refined...
 function gaussian_elimination!(gauss::IterativeGaussianElimination, r::Vector{Int})
     rings = gauss.rings
-    nexts = gauss.next
     lengths = gauss.lengths
     shortcuts = gauss.shortcuts
+    buffer1 = gauss.buffer1
     lenshort = length(shortcuts)
     len = length(r)
-    maxlen = 0
-    last_idx = 0
     r1 = r[1]
 
-    short = r1 > lenshort ? 0 : shortcuts[r1]
-    idx = short == 0 ? nexts[1] : short
-    ridx = rings[idx]
-    ridx1 = ridx[1]
-    short == 0 || @goto inloop
-
-    # while true
-    while r1 > ridx1
-        @label whilesuperior
-        last_idx = idx
-        idx = nexts[idx+1]
-        idx == 0 && @goto outloop
+    idx::Int32 = r1 > lenshort ? zero(Int32) : shortcuts[r1]
+    if !iszero(idx)
+        buffer2 = gauss.buffer2
         ridx = rings[idx]
-        ridx1 = ridx[1]
-    end
-    r1 == ridx1 || @goto outloop
-    # if length(r) < length(ridx) # optional optimization
-    #     r, ridx = ridx, r
-    #     rings[idx] = ridx
-    # end
-    @label inloop
-    maxlen = max(lengths[idx], maxlen)
-    r = symdiff_cycles(r, ridx)
-    isempty(r) && return false, maxlen < len
-    r1 = r[1]
-    short = r1 > lenshort ? 0 : shortcuts[r1]
-    short == 0 && @goto whilesuperior
-    idx = short
-    ridx = rings[idx]
-    ridx1 = ridx[1]
-    @goto inloop
-
-    # end
-
-    @label outloop
-    push!(rings, r)
-    nrings = length(rings)
-    push!(lengths, len)
-    push!(gauss.previous, last_idx)
-    nextlast = nexts[last_idx+1]
-    if nextlast != 0
-        gauss.previous[nextlast] = nrings
-    end
-    if last_idx == 0
-        push!(nexts, nexts[1])
-        nexts[1] = nrings
+        maxlen = lengths[idx]
+        symdiff_cycles!(buffer1, r, ridx)
+        isempty(buffer1) && return maxlen < len # return false
+        r1 = buffer1[1]
+        idx = r1 > lenshort ? zero(Int32) : shortcuts[r1]
+        buffer2 = gauss.buffer2
     else
-        push!(nexts, idx)
-        nexts[last_idx+1] = nrings
+        buffer1 = r
     end
-    r1 > length(shortcuts) && append!(shortcuts, 0 for _ in 1:(r1-length(shortcuts)))
-    shortcuts[r1] = nrings
-    true, false
+    while !iszero(idx)
+        ridx = rings[idx]
+        maxlen = max(lengths[idx], maxlen)
+        symdiff_cycles!(buffer2, buffer1, ridx)
+        isempty(buffer2) && return maxlen < len # return false
+        r1 = buffer2[1]
+        idx = r1 > lenshort ? zero(Int32) : shortcuts[r1]
+        buffer2, buffer1 = buffer1, buffer2
+    end
+
+    push!(rings, copy(buffer1))
+    push!(lengths, len)
+    r1 > length(shortcuts) && append!(shortcuts, zero(Int32) for _ in 1:(r1-length(shortcuts)))
+    shortcuts[r1] = length(rings) % Int32
+    false # return true  # the new ring was independent from the other ones
 end
 
 # function retrieve_vcycle(ecycle, known_pairs)
@@ -969,26 +1019,54 @@ end
 #     return ret
 # end
 
-function strong_rings(rs::Vector{Vector{Int}}, g::PeriodicGraph{D}, depth=15) where D
-    known_pairs = Tuple{PeriodicVertex{D},PeriodicVertex{D}}[]
-    known_pairs_dict = Dict{Tuple{PeriodicVertex{D},PeriodicVertex{D}},Int}()
-    hintsize = 3^D*ne(g)^2
-    sizehint!(known_pairs, hintsize)
-    sizehint!(known_pairs_dict, hintsize)
-    cycles, origin = sort_cycles(rs, known_pairs, known_pairs_dict, g, depth)
-
-    fst_ring = popfirst!(cycles)
+function strong_rings(rs::Vector{Vector{Int}}, g::PeriodicGraph{D}, depth=15, ringsymms::AbstractSymmetryGroup=NoSymmetryGroup(length(rs))) where D
+    ecycles, origin = sort_cycles(g, rs, depth)
+    fst_ring = popfirst!(ecycles)
     gauss = IterativeGaussianElimination(fst_ring)
     ret = Vector{Int}[]
-    n = nv(g)
-    orig_1 = popfirst!(origin)
-    orig_1 != 0 && push!(ret, rs[orig_1])
-    for (i, cycle) in enumerate(cycles)
-        _, onlysmallercycles = gaussian_elimination!(gauss, cycle)
-        onlysmallercycles && continue # cycle is a linear combination of smaller cycles
-        origin[i] != 0 && push!(ret, rs[origin[i]])
+    if ringsymms isa RingSymmetryGroup
+        ringdict = Dict{Vector{Int},Int}()
+        ringmap = zeros(Int, last(unique(ringsymms)))
     end
-    return ret
+    orig_1 = popfirst!(origin)
+    if orig_1 != 0
+        r1 = rs[orig_1]
+        push!(ret, r1)
+        if ringsymms isa RingSymmetryGroup
+            _rsymm1 = ringsymms(r1)
+            rsymm1 = rs[_rsymm1]
+            ringmap[_rsymm1] = 1
+            ringdict[rsymm1] = 1
+            if r1 != rsymm1
+                ringdict[r1] = 1
+            end
+        end
+    end
+    counter = 1
+    for (i, ecycle) in enumerate(ecycles)
+        onlysmallercycles = gaussian_elimination!(gauss, ecycle)
+        onlysmallercycles && continue # cycle is a linear combination of smaller cycles
+        if origin[i] != 0
+            ri = rs[origin[i]]
+            push!(ret, ri)
+            if ringsymms isa RingSymmetryGroup
+                _rsymmi = ringsymms(ri)
+                rsymmi = rs[_rsymmi]
+                if ringmap[_rsymmi] == 0
+                    counter += 1
+                    ringmap[_rsymmi] = counter
+                    ringdict[rsymmi] = counter
+                end
+                if ri != rsymmi
+                    ringdict[ri] = ringmap[_rsymmi]
+                end
+            end
+        end
+    end
+    if ringsymms isa RingSymmetryGroup
+        return ret, RingSymmetryGroup{D}(ringdict, Base.OneTo(counter), nv(g), ringsymms.symms)
+    end
+    return ret, NoSymmetryGroup(length(ret))
 end
 
 """
@@ -1002,10 +1080,19 @@ of smaller cycles. By comparison, a ring is a cycle which cannot be decomposed i
 of two smaller cycles. In particular, all strong rings are rings.
 """
 function strong_rings(g::PeriodicGraph, depth=15, symmetries::AbstractSymmetryGroup=NoSymmetryGroup(g), dist::DistanceRecord=DistanceRecord(g,depth))
-    rs = rings(g, depth, symmetries, dist)
-    return strong_rings(rs, g, depth)
+    rs, symmg = rings(g, depth, symmetries, dist)
+    return strong_rings(rs, g, depth, symmg)
 end
 
+
+"""
+    RingAttributions{D}
+
+Represent a set of rings of a `PeriodicGraph{D}`.
+
+For `ra` of type `RingAttributions{D}`, `ra[i]` is a [`RingIncluding{D}`](@ref) object
+representing the set of rings including `PeriodicVertex{D}(i)`.
+"""
 struct RingAttributions{D}
     rings::Vector{Vector{PeriodicVertex{D}}}
     attrs::Vector{Vector{Tuple{Int,Int}}}
@@ -1025,8 +1112,16 @@ struct RingAttributions{D}
     end
 end
 
+"""
+    RingAttributions(g::PeriodicGraph{D}, strong=false, depth=15, symmetries::AbstractSymmetryGroup=NoSymmetryGroup(g), dist::DistanceRecord=DistanceRecord(g,depth)) where D
+
+Return the rings of `g` sorted into a `RingAttributions`.
+
+If `strong` is set, only the strong rings are kept.
+See [`rings`](@ref) for the meaning of the other arguments.
+"""
 function RingAttributions(g::PeriodicGraph{D}, strong=false, depth=15, symmetries::AbstractSymmetryGroup=NoSymmetryGroup(g), dist::DistanceRecord=DistanceRecord(g,depth)) where D
-    rs = (strong ? strong_rings : rings)(g, depth, symmetries, dist)
+    rs, _ = (strong ? strong_rings : rings)(g, depth, symmetries, dist)
     return RingAttributions{D}(nv(g), rs)
 end
 
@@ -1041,6 +1136,15 @@ function Base.show(io::IO, ras::RingAttributions)
     println(io, typeof(ras), "(rings per node: ", length.(ras.attrs), ')')
 end
 
+"""
+    RingIncluding{D}
+
+The list of rings of a `PeriodicGraph{D}` including a particular vertex
+`PeriodicVertex{D}(i)`.
+
+The object is iterable and indexable by an integer, the returned `Vector{Int}` representing
+a cycle including the target vertex.
+"""
 struct RingIncluding{D}
     ras::RingAttributions{D}
     i::Int

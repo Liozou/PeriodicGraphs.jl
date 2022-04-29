@@ -851,6 +851,30 @@ end
     @test PeriodicGraphs.IncludingIdentity(trivsymmgroup) === trivsymmgroup
     @test_throws ErrorException one(trivsymmgroup)
     triv = only(trivsymmgroup)
+    @test eltype(trivsymmgroup) == IdentitySymmetry
     @test triv[5] == 5
     @test triv[PeriodicVertex3D(14)] == PeriodicVertex3D(14)
+    @test triv([1, 2, 4]) == [1, 2, 4]
+    weaks, symmweaks = rings(lta, 10, symmetries_lta)
+    @test length(symmweaks) == length(symmetries_lta)
+    for str in weaks
+        id = symmweaks(str)
+        for symm in symmweaks
+            image = symm(str)
+            @test image == PeriodicGraphs.normalize_cycle!(copy(image), nv(lta), Val(3))
+            @test image ∈ weaks
+            @test symmweaks(image) == id
+        end
+    end
+    strs, symmstrs = rings(lta, 10, symmetries_lta)
+    @test length(symmstrs) == length(symmetries_lta)
+    for str in strs
+        id = symmstrs(str)
+        for symm in symmstrs
+            image = symm(str)
+            @test image == PeriodicGraphs.normalize_cycle!(copy(image), nv(lta), Val(3))
+            @test image ∈ strs
+            @test symmstrs(image) == id
+        end
+    end
 end
