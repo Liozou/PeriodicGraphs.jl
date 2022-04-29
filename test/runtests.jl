@@ -878,3 +878,14 @@ end
         end
     end
 end
+
+@testset "Simple symmetries" begin
+    map = [2,1,4,3,5]
+    symm = SimpleSymmetry(map)
+    @test symm[3] == 4
+    @test symm[5] == 5
+    dict = Dict(:a => 1, :b => 2, :c => 3, :d => 4, :e => 5, :f => 1, :g => 2, :h => 3, :i => 4, :j => 5)
+    ssymm = SimpleSymmetry(map, dict)
+    @test ssymm[:c] == ssymm[:h] == ssymm[3] == 4
+    @test ssymm[:e] == ssymm[:j] == ssymm[5] == 5
+end
