@@ -3,6 +3,7 @@ using Graphs
 using PeriodicGraphs
 import PeriodicGraphs: ofs, vertex_permutation, dimensionality, LoopException, extended_gcd
 using StaticArrays: SVector, SMatrix
+using Combinatorics
 
 # using Aqua
 # Aqua.test_all(PeriodicGraphs)
@@ -670,26 +671,6 @@ end
     @test reduce(+, s .* λ) == d
 end
 
-const cpi = PeriodicGraph("2 1 2 0 0 1 3 0 0 1 4 0 0 1 5 0 0 2 3 0 -1 2 5 1 -1 3 4 1 0 4 5 0 -1")
-const nab = PeriodicGraph("3 1 2 0 -1 0 1 3 0 -1 -1 1 4 -1 0 0 1 5 -1 0 -1 2 3 0 0 -1 2 4 -1 0 0 2 5 -1 0 -1 3 4 0 0 0 3 5 0 0 0 4 5 0 0 0")
-const lta = PeriodicGraph("3 1 3 0 0 0 1 7 0 -1 0 1 9 0 0 -1 1 21 -1 0 -1 2 4 0 0 0 2 8 0 -1 0 2 9 0 0 0 2 21 -1 0 0 3 5 0 0 0 3 10 0 0 -1 3 22 -1 0 -1 4 6 0 0 0 4 10 0 0 0 4 22 -1 0 0 5 6 0 0 0 5 11 0 0 0 5 23 -1 0 0 6 12 0 0 0 6 24 -1 0 0 7 8 0 0 0 7 11 0 0 0 7 23 -1 0 0 8 12 0 0 0 8 24 -1 0 0 9 10 0 0 0 9 16 0 -1 0 10 13 0 0 0 11 12 0 0 0 11 14 0 0 0 12 15 0 0 0 13 14 0 0 1 13 15 0 0 0 13 17 0 0 0 14 16 0 0 -1 14 18 0 0 0 15 16 0 0 0 15 19 0 0 0 16 20 0 0 0 17 18 0 0 1 17 19 0 0 0 17 22 0 0 0 18 20 0 0 -1 18 23 0 0 0 19 20 0 0 0 19 24 0 0 0 20 21 0 1 0 21 22 0 0 0 23 24 0 0 0")
-const mtn = PeriodicGraph("3 1 2 0 0 0 1 8 0 0 -1 1 11 0 -1 0 1 29 -1 0 0 2 7 0 0 0 2 12 0 -1 0 2 30 -1 0 0 3 5 0 0 0 3 7 0 0 0 3 9 0 0 0 3 31 -1 0 0 4 6 0 0 0 4 8 0 0 0 4 9 0 0 0 4 32 -1 0 0 5 10 0 0 -1 5 11 0 0 0 5 33 -1 0 0 6 10 0 0 0 6 12 0 0 0 6 34 -1 0 0 7 13 0 0 -1 7 15 0 0 0 8 13 0 0 0 8 16 0 0 0 9 14 0 0 0 9 17 0 0 0 10 13 0 0 0 10 18 0 0 0 11 14 0 0 0 11 20 0 0 -1 12 14 0 0 0 12 19 0 0 0 13 21 0 0 0 14 22 0 0 0 15 17 0 0 0 15 19 0 -1 0 15 23 0 0 0 16 17 0 0 0 16 20 0 -1 0 16 24 0 0 0 17 25 0 0 0 18 19 0 0 0 18 20 0 0 0 18 26 0 0 0 19 27 0 0 0 20 28 0 0 0 21 23 0 0 1 21 24 0 0 0 21 26 0 0 0 22 25 0 0 0 22 27 0 0 0 22 28 0 0 -1 23 29 0 0 0 23 33 0 -1 0 24 30 0 0 0 24 34 0 -1 0 25 29 0 0 0 25 30 0 0 0 26 31 0 0 0 26 32 0 0 0 27 31 0 0 0 27 33 0 0 0 28 32 0 0 0 28 34 0 0 0 29 32 0 0 -1 30 31 0 0 0 33 34 0 0 -1")
-
-@testset "cpi, NAB, LTA and MTN examples" begin
-    @test is_well_formed(cpi)
-    @test nv(cpi) == 5 && ne(cpi) == 8
-    @test degree(cpi) == [4; fill(3, 4)]
-    @test is_well_formed(nab)
-    @test ne(nab) == 2*nv(nab) == 10
-    @test all(==(4), degree(nab))
-    @test is_well_formed(lta)
-    @test ne(lta) == 2*nv(lta) == 48
-    @test all(==(4), degree(lta))
-    @test is_well_formed(mtn)
-    @test ne(mtn) == 2*nv(mtn) == 68
-    @test all(==(4), degree(mtn))
-end
-
 @testset "ConstMiniBitSet" begin
     CMBitSet = PeriodicGraphs.ConstMiniBitSet
     @test CMBitSet() == CMBitSet{UInt64}()
@@ -710,6 +691,39 @@ end
     end
 end
 
+const cpi = PeriodicGraph("2 1 2 0 0 1 3 0 0 1 4 0 0 1 5 0 0 2 3 0 -1 2 5 1 -1 3 4 1 0 4 5 0 -1")
+const nab = PeriodicGraph("3 1 2 0 -1 0 1 3 0 -1 -1 1 4 -1 0 0 1 5 -1 0 -1 2 3 0 0 -1 2 4 -1 0 0 2 5 -1 0 -1 3 4 0 0 0 3 5 0 0 0 4 5 0 0 0");
+const cai = PeriodicGraph("3 1 1 1 0 0 1 2 0 0 0 1 3 0 0 0 1 4 0 0 0 1 5 0 0 0 2 2 1 0 0 2 5 0 -1 0 2 6 0 0 0 3 3 1 0 0 3 4 0 0 1 3 6 0 0 1 4 4 1 0 0 4 6 0 1 0 5 5 1 0 0 5 6 0 1 1 6 6 1 0 0");
+const sny = PeriodicGraph("3 1 1 1 0 0 1 2 0 0 0 1 2 1 0 0 1 3 0 0 0 1 4 0 0 0 2 2 1 0 0 2 5 0 0 0 2 6 0 0 0 3 3 1 0 0 3 4 0 0 0 3 6 0 0 1 3 6 1 0 1 4 4 1 0 0 4 5 0 1 0 4 5 1 1 0 5 5 1 0 0 5 6 0 0 0 6 6 1 0 0");
+const wno = PeriodicGraph("3 1 2 0 0 0 1 2 0 1 0 1 3 -1 0 0 1 3 0 0 0 1 4 0 0 0 1 5 0 0 0 1 6 0 0 0 2 3 0 -1 0 2 4 0 0 0 2 5 0 -1 -1 2 6 0 0 0 2 6 1 -1 -1 3 4 0 1 1 3 4 1 0 0 3 5 0 0 0 3 6 1 0 -1 4 5 0 -1 -1 4 5 0 0 -1 4 6 0 0 -1 5 6 0 0 0 5 6 1 0 0");
+const txt = PeriodicGraph("3 1 2 -2 1 1 1 2 -1 1 1 1 2 0 0 0 1 3 -2 1 1 1 3 -1 1 0 1 3 0 0 0 1 4 -2 1 1 1 4 -1 0 1 1 4 0 0 0 1 5 -2 1 1 1 5 -1 0 0 1 5 0 0 0 1 6 -1 1 0 1 6 -1 1 1 1 6 0 0 0 1 7 -1 0 1 1 7 -1 1 1 1 7 0 0 0 1 8 -1 0 0 1 8 -1 1 0 1 8 0 0 0 1 9 -1 0 0 1 9 -1 0 1 1 9 0 0 0 1 10 -1 1 1 1 10 0 0 0 1 10 0 1 0 1 11 -1 1 1 1 11 0 0 0 1 11 0 0 1 1 12 -1 1 0 1 12 0 0 0 1 12 0 1 0 1 13 -1 0 1 1 13 0 0 0 1 13 0 0 1")
+const lta = PeriodicGraph("3 1 3 0 0 0 1 7 0 -1 0 1 9 0 0 -1 1 21 -1 0 -1 2 4 0 0 0 2 8 0 -1 0 2 9 0 0 0 2 21 -1 0 0 3 5 0 0 0 3 10 0 0 -1 3 22 -1 0 -1 4 6 0 0 0 4 10 0 0 0 4 22 -1 0 0 5 6 0 0 0 5 11 0 0 0 5 23 -1 0 0 6 12 0 0 0 6 24 -1 0 0 7 8 0 0 0 7 11 0 0 0 7 23 -1 0 0 8 12 0 0 0 8 24 -1 0 0 9 10 0 0 0 9 16 0 -1 0 10 13 0 0 0 11 12 0 0 0 11 14 0 0 0 12 15 0 0 0 13 14 0 0 1 13 15 0 0 0 13 17 0 0 0 14 16 0 0 -1 14 18 0 0 0 15 16 0 0 0 15 19 0 0 0 16 20 0 0 0 17 18 0 0 1 17 19 0 0 0 17 22 0 0 0 18 20 0 0 -1 18 23 0 0 0 19 20 0 0 0 19 24 0 0 0 20 21 0 1 0 21 22 0 0 0 23 24 0 0 0");
+const mtn = PeriodicGraph("3 1 2 0 0 0 1 8 0 0 -1 1 11 0 -1 0 1 29 -1 0 0 2 7 0 0 0 2 12 0 -1 0 2 30 -1 0 0 3 5 0 0 0 3 7 0 0 0 3 9 0 0 0 3 31 -1 0 0 4 6 0 0 0 4 8 0 0 0 4 9 0 0 0 4 32 -1 0 0 5 10 0 0 -1 5 11 0 0 0 5 33 -1 0 0 6 10 0 0 0 6 12 0 0 0 6 34 -1 0 0 7 13 0 0 -1 7 15 0 0 0 8 13 0 0 0 8 16 0 0 0 9 14 0 0 0 9 17 0 0 0 10 13 0 0 0 10 18 0 0 0 11 14 0 0 0 11 20 0 0 -1 12 14 0 0 0 12 19 0 0 0 13 21 0 0 0 14 22 0 0 0 15 17 0 0 0 15 19 0 -1 0 15 23 0 0 0 16 17 0 0 0 16 20 0 -1 0 16 24 0 0 0 17 25 0 0 0 18 19 0 0 0 18 20 0 0 0 18 26 0 0 0 19 27 0 0 0 20 28 0 0 0 21 23 0 0 1 21 24 0 0 0 21 26 0 0 0 22 25 0 0 0 22 27 0 0 0 22 28 0 0 -1 23 29 0 0 0 23 33 0 -1 0 24 30 0 0 0 24 34 0 -1 0 25 29 0 0 0 25 30 0 0 0 26 31 0 0 0 26 32 0 0 0 27 31 0 0 0 27 33 0 0 0 28 32 0 0 0 28 34 0 0 0 29 32 0 0 -1 30 31 0 0 0 33 34 0 0 -1");
+
+@testset "Particular examples" begin
+    @test is_well_formed(cpi)
+    @test nv(cpi) == 5 && ne(cpi) == 8
+    @test degree(cpi) == [4; fill(3, 4)]
+    @test is_well_formed(nab)
+    @test ne(nab) == 2*nv(nab) == 10
+    @test all(==(4), degree(nab))
+    @test is_well_formed(cai)
+    @test nv(cai) == 6 && ne(cai) == 16
+    @test degree(cai) == [6; fill(5, 4); 6]
+    @test is_well_formed(lta)
+    @test ne(lta) == 2*nv(lta) == 48
+    @test all(==(4), degree(lta))
+    @test is_well_formed(mtn)
+    @test ne(mtn) == 2*nv(mtn) == 68
+    @test all(==(4), degree(mtn))
+    @test is_well_formed(sny)
+    @test nv(sny) == 6 && ne(sny) == 18
+    @test is_well_formed(wno)
+    @test nv(wno) == 6 && ne(wno) == 21
+    @test is_well_formed(txt)
+    @test nv(txt) == 13 && ne(txt) == 36
+end
+
 @testset "Ring statistics" begin
     dag, vertexnums = PeriodicGraphs.arcs_list(cpi, 1, 10, nothing, Bool[0;1;1;0;0])
     @test string(dag[1]) == "JunctionNode([])"
@@ -722,15 +736,21 @@ end
     @test eltype(rea) == Vector{Int}
 
     rings_nab = RingAttributions(nab)
+    lens_nab = [sort!(length.(x)) for x in rings_nab]
+    @test lens_nab == [[3; 4; 8; 8; fill(9, 14)], [3; 4; 8; 8; fill(9, 14)], [3; 3; fill(9, 16)], [3; 4; 8; 8; fill(9, 14)], [3; 4; 8; 8; fill(9, 14)]]
+    for r in permutations(1:5)
+        nabr = nab[r]
+        rings_nab_r = RingAttributions(nab[r])
+        @test length(rings_nab_r.rings) == 12
+        @test sort!(length.(rings_nab_r.rings)) == [3; 3; 4; 8; fill(9, 8)]
+        for (j, ringaroundi) in zip(r, rings_nab_r)
+            @test sort!(length.(ringaroundi)) == lens_nab[j]
+        end
+    end
     nab_rotated = nab[[3,1,2,4,5]]
     rings_nab_rotated = RingAttributions(nab_rotated)
-    @test length(rings_nab.rings) == length(rings_nab_rotated.rings) == 12
     @test sort!(RingAttributions(nab, true).rings) == sort(rings_nab.rings)
     @test sort!(RingAttributions(nab_rotated, true).rings) == sort(rings_nab_rotated.rings)
-    for (i,j) in zip((1,2,4,5), (2,3,4,5))
-        @test sort!(length.(rings_nab[i])) == sort!(length.(rings_nab_rotated[j])) == [3; 4; 8; 8; fill(9, 14)]
-    end
-    @test sort!(length.(rings_nab[3])) == sort!(length.(rings_nab_rotated[1])) == [3; 3; fill(9, 16)]
 
     rings_mtn = RingAttributions(mtn)
     @test length(rings_mtn.rings) == 64
@@ -743,6 +763,18 @@ end
     @test occursin("rings per node: [12", str_rings_mtn)
     @test occursin("15 rings containing vertex 7", string(rings_mtn[7]))
     @test eltype(rings_mtn[1]) == PeriodicGraphs.PeriodicNeighborList{3}
+
+    rings_cai = RingAttributions(cai)
+    cai_rotated = cai[[3,1,2,4,5,6]]
+    rings_cai_rotated = RingAttributions(cai_rotated)
+    @test length(rings_cai.rings) == length(rings_cai_rotated.rings) == 14
+    @test length(RingAttributions(cai_rotated, true).rings) == length(RingAttributions(cai, true).rings)
+
+    rings_sny_strong = RingAttributions(sny, true, 2) # test for orig_1
+    @test length(rings_sny_strong.rings) == 14
+    @test all(==(8), length.(rings_sny_strong.attrs))
+    @test sort!(length.(rings_sny_strong.rings)) == [fill(3, 8); fill(4, 6)]
+    @test sort!(length.(RingAttributions(sny, true).rings)) == [fill(3, 8); fill(4, 6); fill(12, 20)]
 
     rings_lta = RingAttributions(lta)
     @test length(rings_lta.rings) == 113
@@ -757,6 +789,28 @@ end
         @test length(rs[4]) == length(rs[5]) == 6
         @test length(rs[6]) == 8
     end
+
+    for r in permutations(1:6)
+        rings_wno_r = RingAttributions(wno[r], false, 5)
+        @test length(rings_wno_r.rings) == 35
+        @test all(==(29), length.(rings_wno_r.attrs))
+        @test sort!(length.(rings_wno_r.rings)) == [fill(3, 12); 4; 4; 4; fill(5, 6); 6; 6; fill(7, 12)]
+    end
+
+    @test PeriodicGraphs.symdiff_cycles([3,4], [3,5,6]) == [4,5,6]
+    gauss = PeriodicGraphs.IterativeGaussianElimination([3, 4, 7])
+    @test !PeriodicGraphs.gaussian_elimination!(gauss, [3, 6])
+    @test !PeriodicGraphs.gaussian_elimination!(gauss, [4, 7])
+    @test !PeriodicGraphs.gaussian_elimination!(gauss, [1, 3, 5])
+    @test length(gauss.lengths) == length(gauss.rings) == 4
+    @test PeriodicGraphs.gaussian_elimination!(gauss, [1, 4, 5, 7])
+    @test length(gauss.lengths) == length(gauss.rings) == 4
+    @test !PeriodicGraphs.gaussian_elimination!(gauss, [3, 5, 6, 7])
+    @test !PeriodicGraphs.gaussian_elimination!(gauss, [2, 3])
+    @test !PeriodicGraphs.gaussian_elimination!(gauss, [1, 2, 3])
+    @test length(gauss.lengths) == length(gauss.rings) == 7
+
+    @test_broken length(rings(txt, 4)[1]) == length(rings(txt[[2;1;3:13]], 4)[1])
 end
 
 
