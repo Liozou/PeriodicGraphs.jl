@@ -55,6 +55,21 @@ end
 
 const SmallIntType = Int8 # used for distances mostly
 
+"""
+    JunctionNode
+
+Element of the DAG representing the set of arcs linking each vertex `x` to a fixed vertex
+`i` of graph `g`. Each `JunctionNode` contains information on the arcs passing through a
+particular vertex `x`:
+- `num` is the length of the shortest path between `x` and `i`. Since we only collect
+  rings, only the shortest paths are of interest, as well as the path of length `num+1`
+  which may form an odd-length ring when combined with a shortest path.
+- `heads` is a list of neighbors of `x` such that the `lastshort` first are at distance
+  `num - 1` from `i`, and the rest are at distance `num` and have a lower value than `x`.
+- `shortroots` is the set of roots reachable on a shortest path from `x` to `i`. A root is
+  the neighbor of `i` on that path, a.k.a. the second-to-last vertex on that path.
+- `longroots` is the set of roots reachable on a path of length `num+1` from `x` to `i`.
+"""
 struct JunctionNode
     shortroots::ConstMiniBitSet{UInt32}
     longroots::ConstMiniBitSet{UInt32}
@@ -75,9 +90,20 @@ function Base.show(io::IO, x::JunctionNode)
     print(io, "])")
 end
 
+"""
+    PhantomJunctionNode{D}
+
+Element of the phantom DAG.
+
+Similarly to the DAG of `JunctionNode`, the phantom DAG tracks arcs linking vertices `x` to
+a fixed vertex `i`, except that the vertices `x` are those that should be ignored in the
+returned list of rings.
+Thus, only the shortest distance between `x` and `i` needs to be recorded, since the arcs
+themselves will be discarded eventually.
+"""
 struct PhantomJunctionNode{D}
     self::PeriodicVertex{D}
-    parent::PeriodicVertex{D}
+    parent::PeriodicVertex{D} # storing it allows skipping a dict call
     num::SmallIntType
 end
 
@@ -85,7 +111,7 @@ function prepare_phantomdag!(dag, vertexnums, vertexdict, g::PeriodicGraph{D}, i
     phantomdag = PhantomJunctionNode{D}[]
     for x in neighbors(g, i)
         !(cycleavoid isa Nothing) && cycleavoid[x.v] && iszero(x.ofs) && continue
-        if avoid[x.v]
+        if avoid[x.v] || (x.v == i && x.ofs < zero(SVector{D,Int}))
             push!(phantomdag, PhantomJunctionNode(x, PeriodicVertex{D}(i), zero(SmallIntType)))
             vertexdict[x] = -length(phantomdag)
         else
@@ -128,15 +154,15 @@ the graph for distance computations.
 Vertices in `cycleavoid` are considered removed from the graph completely.
 
 Return `(dag, vertexnums)` where `dag` is a `Vector{JunctionNode}` representing, for each
-visited node, the dag of all arcs from that node back to `i`, in a compact representation.
+visited node, the DAG of all arcs from that node back to `i`, in a compact representation.
 `vertexnums` is a `Vector{PeriodicVertex{D}}` whose `k`-th value is the vertex represented
-by number `k` in the `dag`.
+by number `k` in `dag`.
 
-If `ringavoid !== nothing`, this list will not include arcs that pass through nodes of the
+If `ringavoid !== nothing`, `dag` will also not include arcs that pass through nodes of the
 form `PeriodicVertex{D}(j, ofs)` with `j == i` and `ofs < zero(SVector{Int,D})`: this
 allows eagerly pruning cycles that are translations of others. Note that this can result in
 missing cycles if those pass through at least three nodes with `j == i`, but that situation
-should be rare.
+should be exceptionally rare.
 """
 function arcs_list(g::PeriodicGraph{D}, i, depth, ringavoid=nothing, cycleavoid=nothing) where D
     dag = JunctionNode[JunctionNode()]
@@ -146,9 +172,6 @@ function arcs_list(g::PeriodicGraph{D}, i, depth, ringavoid=nothing, cycleavoid=
     sizehint!(vertexnums, hintsize)
     sizehint!(dag, hintsize)
     sizehint!(vertexdict, hintsize)
-    if length(vertexnums) > 62
-        error("The vertex has a degree too large (> 62) to be represented in a MiniBitSet. Please open an issue.")
-    end
     hasavoid = !(ringavoid isa Nothing)
     #= Logic with hasavoid:
     A node `x` is considered dead when they `avoid[x] == true`. Moreover, any node at
@@ -358,7 +381,7 @@ function next_compatible_arc!(buffer, last_positions, idx_stack, dag, check, dis
     num_choice = length(idx_stack)
     updated_last_positions = last_positions
     haslongarc = isodd(length(buffer))
-    num = (num_choice + 2 - haslongarc) % SmallIntType
+    num = (num_choice + 2) % SmallIntType
     root = buffer[num+1] # unused if !check
 
     @label loop
@@ -408,7 +431,7 @@ function initial_compatible_arc!(buffer, idx_stack, dag, check, dist, vertexnums
     num_choice = length(idx_stack)
     head = buffer[check ? 1 : end-1]
     haslongarc = isodd(length(buffer))
-    num = (num_choice + 2 - haslongarc) % SmallIntType
+    num = (num_choice + 2) % SmallIntType
     root = buffer[num+1] # unused if !check
     parents = dag[head]
     for i in 1:num_choice
@@ -459,7 +482,7 @@ end
     RingsEndingAt(dag, midnode, record)
 
 Iterable over the rings of graph `g` around node `i` with `midnode` as vertex furthest
-from `i`.
+from `i`. If there are two such vertices (odd ring), `midnode` is the higher of the two.
 
 `record` should be set to `(dist, vertexnums)` where `dist == DistanceRecord(g, depth)` and
 `dag, vertexnums == first(arcs_list(g, i, depth, ...))`, otherwise the iterator will return
@@ -469,7 +492,7 @@ many more cycles that may not be rings.
     In order to efficiently cycle through the rings, the iterator reuses a buffer on which
     the rings are written. This means that performing an iteration will change the value
     of the previously returned result: for example, `collect(RingsEndingAt(...))` will
-    yield a list containing the same list (unlikely to be an actual ring) repeated over.
+    yield a list containing the same sublist (unlikely to be an actual ring) repeated over.
     To actually obtain the list of rings, copy the result as they arrive by doing
     `map(copy, RingsEndingAt(...))` or `[copy(x) for x in RingsEndingAt(...)]` for example.
 
@@ -483,13 +506,40 @@ end
 Base.IteratorSize(::RingsEndingAt) = Base.SizeUnknown()
 Base.eltype(::Type{RingsEndingAt{T}}) where T = Vector{Int}
 
-function Base.iterate(x::RingsEndingAt, state=nothing)
+#= Iteration strategy for rings passing through `i` and `midnode` (furthest from `i`).
+Each ring is made from the composition of two arcs, let's call them arc1 and arc2. We take
+arc1 in descending order of the `heads` of `midnode` in the DAG until it reaches the first
+head, where we stop. This means arc1 starts with the long rings (odd-size) until reaching
+the `lastshort` head, from which there will only be short rings.
+For each arc1, arc2 is taken in descending order of the `heads` starting at the head after
+that of arc1, or, if that head correspond to a long arc, at `lastshort`.
+
+`shortest_n` is the length of the shortest path from `midnode` to `i`.
+
+Each `state` of the iterator is made of 7 elements:
+- the `buffer` stores the ring under exploration. Its length is `2*shortest_n + 3` if arc1
+  is still in the long arcs, then it becomes `2*shortest_n + 2`
+  Its last element is always `midnode` and its `shortest_n+1` is 1, designating vertex `i`.
+  arc2, which is always a short arc, is stored in the `shortest_n` first element, and arc1
+  between `shortest_n+2` and the end.
+- `idx_stack1` is the stack of indices of the head chosen in each `heads` list to form
+  arc1. In other words, `buffer[end-i] == heads[j]` implies `idx_stack1[i] == j`, where
+  `heads` is that of the `JunctionNode` corresponding to `buffer[end-i+1]`.
+- `idx_stack1` is the same for arc2.
+- `last_positions1` is a bitset where element `k` is true if `idx_stack1[i]` is at its
+  highest value.
+- `last_positions2` is the equivalent for arc2.
+- `i1` is the index of the first element of arc1 among the heads of `midnode`. As
+  mentionned before, it progresses in decreasing order.
+- `i2` is the equivalent for arc2.
+=#
+function Base.iterate(x::RingsEndingAt{T}, state=nothing) where T
     heads = x.heads
     length(heads) ≥ 2 || return nothing
     midnode = x.midnode
     lastshort = x.lastshort
     shortest_n = x.parentsnum % Int
-    if iszero(shortest_n) # rings ending on a neighbour of the root
+    if iszero(shortest_n) # `midnode` is a neighbor of the root: handle things differently
         length(heads) > lastshort || return nothing
         if state === nothing
             state = (Int[1, 0, midnode], Int[length(heads)+1], Int[], zero(UInt64), zero(UInt64), 0, 0)
@@ -504,44 +554,61 @@ function Base.iterate(x::RingsEndingAt, state=nothing)
     num = x.parentsnum + one(SmallIntType)
     state === nothing || @goto next
 
+    # At this point, state === nothing, so this the first iteration.
+    # First, check that there can be any ring by checking there are at least 2 compatible roots:
     length(union(dag[midnode].shortroots, dag[midnode].longroots)) ≥ 2 || return nothing
+
     idx_stack1 = Vector{Int}(undef, shortest_n)
-    idx_stack2 = Vector{Int}(undef, shortest_n-1)
+    idx_stack2 = Vector{Int}(undef, shortest_n-1) # idx_stack2 can only contain short arcs
     buffer = Vector{Int}(undef, 2*shortest_n + 3)
-    buffer[shortest_n+1] = 1
-    buffer[end] = midnode
+    buffer[shortest_n+1] = 1 # Fixed position
+    buffer[end] = midnode # Will evolve at most once, when going from long to short arcs
     i1 = length(heads)
     while i1 > 1
-        if i1 == lastshort
+        if i1 == lastshort # This corresponds to the transition from long to short arcs.
             pop!(buffer)
             pop!(idx_stack1)
             buffer[end] = midnode
         end
         buffer[end-1] = heads[i1]
         last_positions1 = initial_compatible_arc!(buffer, idx_stack1, dag, false, dist, vertexnums)
-        while last_positions1 != ~zero(UInt64)
-            i2 = min(i1, lastshort+1)
-            while i2 > 1
-                i2 -= 1
-                head2 = heads[i2]
-                i1 > lastshort && buffer[end-2] == head2 && continue # 3-cycle near midnode
-                buffer[1] = head2
-                if dist !== nothing && # checking for rings instead of cycles
-                  (is_distance_smaller!(dist, vertexnums[buffer[shortest_n+2]], vertexnums[head2], num) ||
-                  (i1 > lastshort && is_distance_smaller!(dist, vertexnums[buffer[shortest_n+3]], vertexnums[head2], num)))
-                    continue
-                end
-                last_positions2 = initial_compatible_arc!(buffer, idx_stack2, dag, true, dist, vertexnums)
-                while last_positions2 != ~zero(UInt64)
-                    return (buffer, (buffer, idx_stack1, idx_stack2, last_positions1, last_positions2, i1, i2))
-
-                    @label next
-                    @inbounds buffer, idx_stack1, idx_stack2, last_positions1, last_positions2, i1, i2 = state
-                    last_positions2 = next_compatible_arc!(buffer, last_positions2, idx_stack2, dag, true, dist, vertexnums)
-                end
+        @label start_iter_i1
+        if last_positions1 == ~zero(UInt64)
+            @goto next_iter_i1
+        elseif dist !== nothing && i1 > lastshort
+            while is_distance_smaller!(dist, vertexnums[buffer[shortest_n+2]], vertexnums[midnode], num)
+                last_positions1 = next_compatible_arc!(buffer, last_positions1, idx_stack1, dag, false, dist, vertexnums)
+                last_positions1 == ~zero(UInt64) && @goto next_iter_i1
             end
-            last_positions1 = next_compatible_arc!(buffer, last_positions1, idx_stack1, dag, false, dist, vertexnums)
         end
+        # At this position, buffer[shortest_n+2:end] contains the first arc1 corresponding to i1
+
+        i2 = min(i1, lastshort+1)
+        while i2 > 1
+            i2 -= 1
+            head2 = heads[i2]
+            i1 > lastshort && buffer[end-2] == head2 && continue # 3-cycle near midnode
+            # @show buffer[shortest_n+2:end]
+            # @show bitstring(last_positions1)
+            buffer[1] = head2
+            if dist !== nothing && # checking for rings instead of cycles
+                (is_distance_smaller!(dist, vertexnums[buffer[shortest_n+2]], vertexnums[head2], num) ||
+                (i1 > lastshort && is_distance_smaller!(dist, vertexnums[buffer[shortest_n+3]], vertexnums[head2], num)))
+                continue
+            end
+            last_positions2 = initial_compatible_arc!(buffer, idx_stack2, dag, true, dist, vertexnums)
+            while last_positions2 != ~zero(UInt64)
+                return (buffer, (buffer, idx_stack1, idx_stack2, last_positions1, last_positions2, i1, i2))
+
+                @label next
+                @inbounds buffer, idx_stack1, idx_stack2, last_positions1, last_positions2, i1, i2 = state
+                last_positions2 = next_compatible_arc!(buffer, last_positions2, idx_stack2, dag, true, dist, vertexnums)
+            end
+        end
+        last_positions1 = next_compatible_arc!(buffer, last_positions1, idx_stack1, dag, false, dist, vertexnums)
+        @goto start_iter_i1
+
+        @label next_iter_i1
         i1 -= 1
     end
     nothing
@@ -629,7 +696,7 @@ end
 
 
 """
-    no_neighboring_nodes(g, symmetries::AbstractSymmetryGroup)
+    no_neighboring_nodes(g, symmetries::AbstractSymmetryGroup=NoSymmetryGroup(g))
 
 Return a list of nodes representatives (modulo symmetries) such that all the vertices in
 `g` either have their representative in the list or are surrounded by nodes whose
@@ -638,18 +705,20 @@ representatives are in the list.
 This means that all cycles and rings of `g` have at least one node whose representative is
 in the list.
 """
-function no_neighboring_nodes(g, symmetries::AbstractSymmetryGroup)
+function no_neighboring_nodes(g, symmetries::AbstractSymmetryGroup=NoSymmetryGroup(g))
     n = nv(g)
-    # category: 0 => unvisited, 1 => to explore, 2 => unvisited unknown, 3 => not to explore
+    # category: 0 => unvisited, 1 => to explore, 2 => unknown (queued), 3 => not to explore
     categories = zeros(Int8, n)
-    categories[1] = 2
     toexplore = Int[]
-    next_i_init = 1
+    next_i_init = 2
     uniques = unique(symmetries)
-    Q = Int[1]
+    u_candidate = uniques[1]
+    Q = Int[]
     @label loop
+    push!(Q, u_candidate)
+    categories[u_candidate] = 2
     for u in Q
-        newcat = categories[u] == 2 ? UInt8(1) : UInt(2)
+        newcat = categories[u] == 2 ? UInt8(1) : UInt8(2)
         if newcat == 1
             if any(x -> symmetries(x.v) == u, neighbors(g, u))
                 categories[u] = 1
@@ -663,7 +732,7 @@ function no_neighboring_nodes(g, symmetries::AbstractSymmetryGroup)
             v = symmetries(x.v)
             cat = categories[v]
             if iseven(cat)
-                if cat == 0 && iszero(x.ofs)
+                if iszero(cat)
                     push!(Q, v)
                 end
                 categories[v] = newcat
@@ -673,10 +742,9 @@ function no_neighboring_nodes(g, symmetries::AbstractSymmetryGroup)
     end
     for i_candidate in next_i_init:length(uniques)
         u_candidate = uniques[i_candidate]
-        if categories[u_candidate] == 0
+        if iseven(categories[u_candidate])
             next_i_init = i_candidate + 1
             empty!(Q)
-            push!(Q, u_candidate)
             @goto loop
         end
     end
@@ -733,6 +801,13 @@ A `DistanceRecord` `dist` can be optionally provided to track the distances betw
 of vertices in the graph.
 """
 function rings(g::PeriodicGraph{D}, depth=15, symmetries::AbstractSymmetryGroup=NoSymmetryGroup(g), dist::DistanceRecord=DistanceRecord(g,depth)) where D
+    # The following errors are irrecoverable without changing the structure of the
+    # algorithm to allow larger bitsets. Open an issue if required.
+    if any(>(62), degree(g))
+        error("A vertex has a degree too large (> 62) to be represented in a ConstMiniBitSet. Please open an issue.")
+    elseif depth > 62
+        error("Required depth is > 62 which cannot be handled with ConstMiniBitSet. Please open an issue.")
+    end
     toexplore = sort!(no_neighboring_nodes(g, symmetries))
     ret = Vector{Int}[]
     visited = falses(nv(g))
@@ -802,7 +877,14 @@ function find_known_pair!(known_pairs_dict, known_pairs, x)
     pairid
 end
 
+"""
+    unique_order(cycles)
+
+Return a sublist `I` of indices of `cycles` such that `cycles[I]` is the list of unique
+elements of `cycles`, sorted by length first and by value next.
+"""
 function unique_order(cycles)
+    isempty(cycles) && return Int[]
     I = sortperm(cycles)
     last_c = cycles[I[1]]
     n = length(cycles)
@@ -893,8 +975,8 @@ function symdiff_cycles!(c::Vector{Int}, a::Vector{Int}, b::Vector{Int})
         a[counter_a] == b[counter_a] || break
     end
     counter_a -= 1
-    newlen = lenb + lena - counter_a
-    length(c) < newlen && resize!(c, newlen)
+    newlen = (lenb + lena - counter_a) % UInt
+    length(c) < newlen && @inbounds resize!(c, newlen)
     counter_b = counter_a + 1
     y = lenb == 0 ? typemax(Int) : (@inbounds b[1+counter_a])
     j = 1
@@ -959,14 +1041,13 @@ function gaussian_elimination!(gauss::IterativeGaussianElimination, r::Vector{In
     rings = gauss.rings
     lengths = gauss.lengths
     shortcuts = gauss.shortcuts
-    buffer1 = gauss.buffer1
+    buffer1::Vector{Int} = gauss.buffer1
     lenshort = length(shortcuts)
     len = length(r)
     r1 = r[1]
 
     idx::Int32 = r1 > lenshort ? zero(Int32) : shortcuts[r1]
     if !iszero(idx)
-        buffer2 = gauss.buffer2
         ridx = rings[idx]
         maxlen = lengths[idx]
         symdiff_cycles!(buffer1, r, ridx)
@@ -1021,14 +1102,20 @@ end
 
 function strong_rings(rs::Vector{Vector{Int}}, g::PeriodicGraph{D}, depth=15, ringsymms::AbstractSymmetryGroup=NoSymmetryGroup(length(rs))) where D
     ecycles, origin = sort_cycles(g, rs, depth)
-    fst_ring = popfirst!(ecycles)
+    if isempty(ecycles)
+        if ringsymms isa RingSymmetryGroup
+            return Vector{Int}[], RingSymmetryGroup{D}(Dict{Vector{Int},Int}(), Base.OneTo(0), nv(g), ringsymms.symms)
+        end
+        return Vector{Int}[], NoSymmetryGroup(0)
+    end
+    fst_ring = first(ecycles)
     gauss = IterativeGaussianElimination(fst_ring)
     ret = Vector{Int}[]
     if ringsymms isa RingSymmetryGroup
         ringdict = Dict{Vector{Int},Int}()
         ringmap = zeros(Int, last(unique(ringsymms)))
     end
-    orig_1 = popfirst!(origin)
+    orig_1 = first(origin)
     if orig_1 != 0
         r1 = rs[orig_1]
         push!(ret, r1)
@@ -1043,7 +1130,7 @@ function strong_rings(rs::Vector{Vector{Int}}, g::PeriodicGraph{D}, depth=15, ri
         end
     end
     counter = 1
-    for (i, ecycle) in enumerate(ecycles)
+    for (i, ecycle) in Iterators.drop(enumerate(ecycles), 1)
         onlysmallercycles = gaussian_elimination!(gauss, ecycle)
         onlysmallercycles && continue # cycle is a linear combination of smaller cycles
         if origin[i] != 0
