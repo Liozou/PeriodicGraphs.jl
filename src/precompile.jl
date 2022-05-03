@@ -24,7 +24,7 @@ function _precompile_()
     # Ring statistics
     SmallIntT = PeriodicGraphs.SmallIntType
     CMBitSet = PeriodicGraphs.ConstMiniBitSet
-    for T in (UInt32,UInt64)
+    for T in (UInt8, UInt16, UInt32, UInt64, UInt128)
         @enforce Base.precompile(Tuple{typeof(PeriodicGraphs._constminibitset),T})
         @enforce Base.precompile(Tuple{Type{CMBitSet{T}}})
         @enforce Base.precompile(Tuple{Type{CMBitSet{T}},Int})
@@ -45,13 +45,17 @@ function _precompile_()
         @enforce Base.precompile(Tuple{typeof(minimum), CMBitSet{T}})
         @enforce Base.precompile(Tuple{typeof(maximum), CMBitSet{T}})
         @enforce Base.precompile(Tuple{typeof(PeriodicGraphs.unsafe_union!),Ptr{CMBitSet{T}},T})
-        @enforce Base.precompile(Tuple{Type{PeriodicGraphs.JunctionNode},Int,SmallIntT,CMBitSet{T}})
+        @enforce Base.precompile(Tuple{Type{PeriodicGraphs.JunctionNode{T}},Int,SmallIntT,CMBitSet{T}})
+        @enforce Base.precompile(Tuple{Type{PeriodicGraphs.JunctionNode{T}}})
+        @enforce Base.precompile(Tuple{Type{PeriodicGraphs.JunctionNode{T}},Int})
     end
-    @enforce Base.precompile(Tuple{Type{PeriodicGraphs.JunctionNode}})
-    @enforce Base.precompile(Tuple{Type{PeriodicGraphs.JunctionNode},Int})
     @enforce Base.precompile(Tuple{typeof(PeriodicGraphs.unsafe_incr!),Ptr{SmallIntT}})
     @enforce Base.precompile(Tuple{typeof(PeriodicGraphs.symdiff_cycles), Vector{Int}, Vector{Int}})
-    @enforce Base.precompile(Tuple{typeof(PeriodicGraphs.gaussian_elimination!), PeriodicGraphs.IterativeGaussianElimination, Vector{Int}})
+    @enforce Base.precompile(Tuple{Type{PeriodicGraphs.IterativeGaussianEliminationLength}, Vector{Int}})
+    @enforce Base.precompile(Tuple{Type{PeriodicGraphs.IterativeGaussianElimination{Vector{Int32}}}, Vector{Int}})
+    @enforce Base.precompile(Tuple{Type{PeriodicGraphs.IterativeGaussianElimination}, Vector{Int}})
+    @enforce Base.precompile(Tuple{typeof(PeriodicGraphs.gaussian_elimination!), PeriodicGraphs.IterativeGaussianEliminationLength, Vector{Int}})
+    @enforce Base.precompile(Tuple{typeof(PeriodicGraphs.gaussian_elimination!), PeriodicGraphs.IterativeGaussianElimination{Vector{Int32}}, Vector{Int}})
 
 
     for i in 0:3
@@ -163,15 +167,17 @@ function _precompile_()
         @enforce Base.precompile(Tuple{typeof(periodiccellgraph),PeriodicGraph{i}})
 
         # Ring statistics
-        dag = Vector{PeriodicGraphs.JunctionNode}
+        dag{T} = Vector{PeriodicGraphs.JunctionNode{T}}
         vertexnums = Vector{PeriodicVertex{i}}
         dist = PeriodicGraphs.DistanceRecord{i}
-        rea = PeriodicGraphs.RingsEndingAt{Tuple{dist, vertexnums}}
+        rea{T} = PeriodicGraphs.RingsEndingAt{T,Tuple{dist, vertexnums}}
         nosymm = PeriodicGraphs.NoSymmetryGroup
         pair = Tuple{PeriodicVertex{i},PeriodicVertex{i}}
-        @enforce Base.precompile(Tuple{typeof(PeriodicGraphs.prepare_phantomdag!), dag, vertexnums, Dict{PeriodicVertex{i},Int}, PeriodicGraph{i}, Int, BitVector, Nothing})
-        @enforce Base.precompile(Tuple{typeof(PeriodicGraphs.prepare_phantomdag!), dag, vertexnums, Dict{PeriodicVertex{i},Int}, PeriodicGraph{i}, Int, BitVector, BitVector})
-        @enforce Base.precompile(Tuple{typeof(PeriodicGraphs.handle_phantomdag!), PeriodicGraphs.PhantomJunctionNode{i}, PeriodicGraph{i}, dag, Int, Int})
+        for T in (UInt8, UInt16, UInt32, UInt64, UInt128)
+            @enforce Base.precompile(Tuple{typeof(PeriodicGraphs.prepare_phantomdag!), dag{T}, vertexnums, Dict{PeriodicVertex{i},Int}, PeriodicGraph{i}, Int, BitVector, Nothing})
+            @enforce Base.precompile(Tuple{typeof(PeriodicGraphs.prepare_phantomdag!), dag{T}, vertexnums, Dict{PeriodicVertex{i},Int}, PeriodicGraph{i}, Int, BitVector, BitVector})
+            @enforce Base.precompile(Tuple{typeof(PeriodicGraphs.handle_phantomdag!), PeriodicGraphs.PhantomJunctionNode{i}, PeriodicGraph{i}, dag{T}, Int, Int})
+        end
         @enforce Base.precompile(Tuple{typeof(PeriodicGraphs.arcs_list), PeriodicGraph{i}, Int, Int, Nothing, Nothing})
         @enforce Base.precompile(Tuple{typeof(PeriodicGraphs.arcs_list), PeriodicGraph{i}, Int, Int, BitVector, Nothing})
         @enforce Base.precompile(Tuple{typeof(PeriodicGraphs.arcs_list), PeriodicGraph{i}, Int, Int, Nothing, BitVector})
@@ -184,12 +190,14 @@ function _precompile_()
         @enforce Base.precompile(Tuple{typeof(PeriodicGraphs._reorderinit), Vector{Int}, PeriodicVertex{i}, PeriodicVertex{i}})
         @enforce Base.precompile(Tuple{typeof(PeriodicGraphs.init_distance_record!), dist, Int, Int})
         @enforce Base.precompile(Tuple{typeof(PeriodicGraphs.is_distance_smaller!), dist, PeriodicVertex{i}, PeriodicVertex{i}, SmallIntT})
-        @enforce Base.precompile(Tuple{typeof(PeriodicGraphs.next_compatible_arc!), Vector{Int}, Vector{UInt64}, Vector{Int}, dag, Bool, dist, vertexnums})
-        @enforce Base.precompile(Tuple{typeof(PeriodicGraphs.initial_compatible_arc!), Vector{Int}, Vector{Int}, dag, Bool, dist, vertexnums})
-        @enforce Base.precompile(Tuple{Type{PeriodicGraphs.RingsEndingAt}, dag, Int, Tuple{dist, vertexnums}})
-        @enforce Base.precompile(Tuple{typeof(iterate), rea, Tuple{Vector{Int}, Vector{Int}, Vector{Int}, UInt64, UInt64, Int, Int}})
-        @enforce Base.precompile(Tuple{typeof(iterate), rea, Nothing})
-        @enforce Base.precompile(Tuple{typeof(iterate), rea})
+        for T in (UInt8, UInt16, UInt32, UInt64, UInt128)
+            @enforce Base.precompile(Tuple{typeof(PeriodicGraphs.next_compatible_arc!), Vector{Int}, Vector{UInt64}, Vector{Int}, dag{T}, Bool, dist, vertexnums})
+            @enforce Base.precompile(Tuple{typeof(PeriodicGraphs.initial_compatible_arc!), Vector{Int}, Vector{Int}, dag{T}, Bool, dist, vertexnums})
+            @enforce Base.precompile(Tuple{Type{PeriodicGraphs.RingsEndingAt}, dag{T}, Int, Tuple{dist, vertexnums}})
+            @enforce Base.precompile(Tuple{typeof(iterate), rea{T}, Tuple{Vector{Int}, Vector{Int}, Vector{Int}, UInt64, UInt64, Int, Int}})
+            @enforce Base.precompile(Tuple{typeof(iterate), rea{T}, Nothing})
+            @enforce Base.precompile(Tuple{typeof(iterate), rea{T}})
+        end
         @enforce Base.precompile(Tuple{typeof(PeriodicGraphs.normalize_cycle!), Vector{Int}, Int, Val{i}})
         @enforce Base.precompile(Tuple{typeof(PeriodicGraphs.rings_around), PeriodicGraph{i}, Int, Int, dist, BitVector})
         @enforce Base.precompile(Tuple{typeof(PeriodicGraphs.no_neighboring_nodes), PeriodicGraph{i}, nosymm})
