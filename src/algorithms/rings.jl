@@ -56,7 +56,7 @@ end
 const SmallIntType = Int8 # used for distances mostly
 
 """
-    JunctionNode
+    JunctionNode{T}
 
 Element of the DAG representing the set of arcs linking each vertex `x` to a fixed vertex
 `i` of graph `g`. Each `JunctionNode` contains information on the arcs passing through a
@@ -70,22 +70,22 @@ particular vertex `x`:
   the neighbor of `i` on that path, a.k.a. the second-to-last vertex on that path.
 - `longroots` is the set of roots reachable on a path of length `num+1` from `x` to `i`.
 """
-struct JunctionNode
-    shortroots::ConstMiniBitSet{UInt32}
-    longroots::ConstMiniBitSet{UInt32}
+struct JunctionNode{T}
+    shortroots::ConstMiniBitSet{T}
+    longroots::ConstMiniBitSet{T}
     lastshort::SmallIntType # (use SmallIntType for better padding)
     num::SmallIntType # length of the shortest branch
     heads::Vector{Int}
-    function JunctionNode(heads::AbstractVector, num, roots::ConstMiniBitSet)
-        new(roots, ConstMiniBitSet{UInt32}(), length(heads) % SmallIntType, num % SmallIntType, heads)
+    function JunctionNode{T}(heads::AbstractVector, num, roots::ConstMiniBitSet{T}) where T
+        new(roots, ConstMiniBitSet{T}(), length(heads) % SmallIntType, num % SmallIntType, heads)
     end
 end
-JunctionNode() = JunctionNode(Int[], -one(SmallIntType), ConstMiniBitSet{UInt32}())
-JunctionNode(head::Integer, num, roots::ConstMiniBitSet) = JunctionNode(Int[head], num, roots)
-JunctionNode(root::Integer) = JunctionNode(1, zero(SmallIntType), ConstMiniBitSet{UInt32}(root))
+JunctionNode{T}() where {T} = JunctionNode{T}(Int[], -one(SmallIntType), ConstMiniBitSet{T}())
+JunctionNode{T}(head::Integer, num, roots::ConstMiniBitSet{T}) where {T} = JunctionNode{T}(Int[head], num, roots)
+JunctionNode{T}(root::Integer) where {T} = JunctionNode{T}(1, zero(SmallIntType), ConstMiniBitSet{T}(root))
 
-function Base.show(io::IO, x::JunctionNode)
-    print(io, "JunctionNode([")
+function Base.show(io::IO, x::JunctionNode{T}) where {T}
+    print(io, "JunctionNode{", T, "}([")
     join(io, x.heads, ", ")
     print(io, "])")
 end
@@ -107,7 +107,7 @@ struct PhantomJunctionNode{D}
     num::SmallIntType
 end
 
-function prepare_phantomdag!(dag, vertexnums, vertexdict, g::PeriodicGraph{D}, i, avoid, cycleavoid) where D
+function prepare_phantomdag!(dag::Vector{JunctionNode{T}}, vertexnums, vertexdict, g::PeriodicGraph{D}, i, avoid, cycleavoid) where {T,D}
     phantomdag = PhantomJunctionNode{D}[]
     for x in neighbors(g, i)
         !(cycleavoid isa Nothing) && cycleavoid[x.v] && iszero(x.ofs) && continue
@@ -116,7 +116,7 @@ function prepare_phantomdag!(dag, vertexnums, vertexdict, g::PeriodicGraph{D}, i
             vertexdict[x] = -length(phantomdag)
         else
             push!(vertexnums, x)
-            push!(dag, JunctionNode(length(vertexnums)))
+            push!(dag, JunctionNode{T}(length(vertexnums)))
         end
     end
     return phantomdag
@@ -139,21 +139,30 @@ function handle_phantomdag!(phantomdag, vertexdict, g, last_stop, next_stop)
     nothing
 end
 
-const shortrootsoffset = fieldoffset(JunctionNode, findfirst(==(:shortroots), fieldnames(JunctionNode)))
-const longrootsoffset = fieldoffset(JunctionNode, findfirst(==(:longroots), fieldnames(JunctionNode)))
-const lastshortoffset = fieldoffset(JunctionNode, findfirst(==(:lastshort), fieldnames(JunctionNode)))
+const lastshortoffsetpos = findfirst(==(:lastshort), fieldnames(JunctionNode))
+const shortrootsoffsetpos = findfirst(==(:shortroots), fieldnames(JunctionNode))
+const longrootsoffsetpos = findfirst(==(:longroots), fieldnames(JunctionNode))
+@inline function lastshortoffsetof(ptr::Ptr{JunctionNode{T}}) where {T}
+    Ptr{SmallIntType}(ptr + fieldoffset(JunctionNode{T}, lastshortoffsetpos))
+end
+@inline function shortrootsoffsetof(ptr::Ptr{JunctionNode{T}}) where {T}
+    Ptr{ConstMiniBitSet{T}}(ptr + fieldoffset(JunctionNode{T}, shortrootsoffsetpos))
+end
+@inline function longrootsoffsetof(ptr::Ptr{JunctionNode{T}}) where {T}
+    Ptr{ConstMiniBitSet{T}}(ptr + fieldoffset(JunctionNode{T}, longrootsoffsetpos))
+end
 @inline unsafe_incr!(ptr::Ptr{T}) where {T} = unsafe_store!(ptr, unsafe_load(ptr) + one(T))
 @inline unsafe_union!(ptr, val) = unsafe_store!(ptr, _constminibitset(val | unsafe_load(ptr).x))
 
 """
-    arcs_list(g::PeriodicGraph{D}, i, depth, ringavoid=nothing, cycleavoid=nothing)
+    arcs_list(g::PeriodicGraph{D}, i, depth::T, ringavoid=nothing, cycleavoid=nothing) where {D,T}
 
 Compute the list of shortest arcs starting from vertex `i` up to length `depth+1`.
 Vertices in `ringavoid` are not included in the returned arcs, but considered still part of
 the graph for distance computations.
 Vertices in `cycleavoid` are considered removed from the graph completely.
 
-Return `(dag, vertexnums)` where `dag` is a `Vector{JunctionNode}` representing, for each
+Return `(dag, vertexnums)` where `dag` is a `Vector{JunctionNode{T}}` representing, for each
 visited node, the DAG of all arcs from that node back to `i`, in a compact representation.
 `vertexnums` is a `Vector{PeriodicVertex{D}}` whose `k`-th value is the vertex represented
 by number `k` in `dag`.
@@ -163,9 +172,15 @@ form `PeriodicVertex{D}(j, ofs)` with `j == i` and `ofs < zero(SVector{Int,D})`:
 allows eagerly pruning cycles that are translations of others. Note that this can result in
 missing cycles if those pass through at least three nodes with `j == i`, but that situation
 should be exceptionally rare.
+
+!!! note
+    The type `T` of `depth` is used as type parameter to the `JunctionNode`, just to avoid
+    having a dedicated argument (since `depth` should be at most 62 for the rest of the
+    algorithm to work). This size controls the maximal degree a vertex of `g` should have :
+    for example, `T == UInt32` indicates that all vertices must have degree at most 31.
 """
-function arcs_list(g::PeriodicGraph{D}, i, depth, ringavoid=nothing, cycleavoid=nothing) where D
-    dag = JunctionNode[JunctionNode()]
+function arcs_list(g::PeriodicGraph{D}, i, depth::T, ringavoid=nothing, cycleavoid=nothing) where {D,T}
+    dag = JunctionNode{T}[JunctionNode{T}()]
     vertexnums = PeriodicVertex{D}[PeriodicVertex{D}(i)]
     vertexdict = Dict{PeriodicVertex{D},Int}()
     hintsize = ceil(Int, depth^2.9) # empirical estimate
@@ -202,7 +217,7 @@ function arcs_list(g::PeriodicGraph{D}, i, depth, ringavoid=nothing, cycleavoid=
         else
             append!(vertexnums, x for x in neighbors(g, i) if !cycleavoid[x.v])
         end
-        append!(dag, JunctionNode(j) for j in 2:length(vertexnums))
+        append!(dag, JunctionNode{T}(j) for j in 2:length(vertexnums))
     end
     for (j, x) in enumerate(vertexnums)
         vertexdict[x] = j
@@ -213,14 +228,14 @@ function arcs_list(g::PeriodicGraph{D}, i, depth, ringavoid=nothing, cycleavoid=
         counter += 1
         if hasavoid 
             if counter == next_stop
-                parents.num == _depth && break
+                parents.num ≥ _depth && break
                 next_stop = length(dag) + 1
                 handle_phantomdag!(phantomdag, vertexdict, g, last_stop_phantomdag, next_stop_phantomdag)
                 last_stop_phantomdag = next_stop_phantomdag
                 next_stop_phantomdag = length(phantomdag) + 1
             end
         else
-            parents.num == _depth && break
+            parents.num ≥ _depth && break
         end
         previous = vertexnums[parents.heads[1]]
         num = parents.num + one(SmallIntType)
@@ -232,7 +247,7 @@ function arcs_list(g::PeriodicGraph{D}, i, depth, ringavoid=nothing, cycleavoid=
             idx = get!(vertexdict, x, dead ? -length(phantomdag)-1 : length(dag)+1)
             if idx == length(dag)+1
                 push!(vertexnums, x)
-                push!(dag, JunctionNode(counter, num, parents.shortroots))
+                push!(dag, JunctionNode{T}(counter, num, parents.shortroots))
             elseif idx > counter
                 junction = dag[idx]
                 push!(junction.heads, counter)
@@ -240,10 +255,10 @@ function arcs_list(g::PeriodicGraph{D}, i, depth, ringavoid=nothing, cycleavoid=
                 # This is only possible because it is stored in a Vector, imposing fixed addresses.
                 ptr = pointer(dag, idx)
                 if num == junction.num
-                    unsafe_incr!(Ptr{SmallIntType}(ptr + lastshortoffset))
-                    unsafe_union!(Ptr{ConstMiniBitSet{UInt32}}(ptr + shortrootsoffset), parents.shortroots.x)
+                    unsafe_incr!(lastshortoffsetof(ptr))
+                    unsafe_union!(shortrootsoffsetof(ptr), parents.shortroots.x)
                 else
-                    unsafe_union!(Ptr{ConstMiniBitSet{UInt32}}(ptr + longrootsoffset), parents.shortroots.x)
+                    unsafe_union!(longrootsoffsetof(ptr), parents.shortroots.x)
                 end
             elseif dead && idx == -length(phantomdag)-1
                 push!(phantomdag, PhantomJunctionNode(x, current_node, num))
@@ -469,13 +484,13 @@ function initial_compatible_arc!(buffer, idx_stack, dag, check, dist, vertexnums
 end
 
 
-struct RingsEndingAt{T}
-    dag::Vector{JunctionNode}
+struct RingsEndingAt{T,R}
+    dag::Vector{JunctionNode{T}}
     midnode::Int
     heads::Vector{Int}
     lastshort::Int
     parentsnum::SmallIntType
-    record::T
+    record::R
 end
 
 """
@@ -501,10 +516,10 @@ many more cycles that may not be rings.
 """
 @inline function RingsEndingAt(dag, midnode, record=(nothing,nothing))
     parents = dag[midnode]
-    RingsEndingAt{typeof(record)}(dag, midnode, parents.heads, parents.lastshort % Int, parents.num, record)
+    RingsEndingAt(dag, midnode, parents.heads, parents.lastshort % Int, parents.num, record)
 end
 Base.IteratorSize(::RingsEndingAt) = Base.SizeUnknown()
-Base.eltype(::Type{RingsEndingAt{T}}) where T = Vector{Int}
+Base.eltype(::Type{RingsEndingAt{T,R}}) where {T,R} = Vector{Int}
 
 #= Iteration strategy for rings passing through `i` and `midnode` (furthest from `i`).
 Each ring is made from the composition of two arcs, let's call them arc1 and arc2. We take
@@ -533,7 +548,7 @@ Each `state` of the iterator is made of 7 elements:
   mentionned before, it progresses in decreasing order.
 - `i2` is the equivalent for arc2.
 =#
-function Base.iterate(x::RingsEndingAt{T}, state=nothing) where T
+function Base.iterate(x::RingsEndingAt{T,R}, state=nothing) where {T,R}
     heads = x.heads
     length(heads) ≥ 2 || return nothing
     midnode = x.midnode
@@ -576,9 +591,12 @@ function Base.iterate(x::RingsEndingAt{T}, state=nothing) where T
         if last_positions1 == ~zero(UInt64)
             @goto next_iter_i1
         elseif dist !== nothing && i1 > lastshort
-            while is_distance_smaller!(dist, vertexnums[buffer[shortest_n+2]], vertexnums[midnode], num)
+            sroots = dag[midnode].shortroots
+            root1 = buffer[shortest_n+2]
+            while root1 ∈ sroots || is_distance_smaller!(dist, vertexnums[root1], vertexnums[midnode], num)
                 last_positions1 = next_compatible_arc!(buffer, last_positions1, idx_stack1, dag, false, dist, vertexnums)
                 last_positions1 == ~zero(UInt64) && @goto next_iter_i1
+                root1 = buffer[shortest_n+2]
             end
         end
         # At this position, buffer[shortest_n+2:end] contains the first arc1 corresponding to i1
@@ -588,8 +606,6 @@ function Base.iterate(x::RingsEndingAt{T}, state=nothing) where T
             i2 -= 1
             head2 = heads[i2]
             i1 > lastshort && buffer[end-2] == head2 && continue # 3-cycle near midnode
-            # @show buffer[shortest_n+2:end]
-            # @show bitstring(last_positions1)
             buffer[1] = head2
             if dist !== nothing && # checking for rings instead of cycles
                 (is_distance_smaller!(dist, vertexnums[buffer[shortest_n+2]], vertexnums[head2], num) ||
@@ -803,16 +819,27 @@ of vertices in the graph.
 function rings(g::PeriodicGraph{D}, depth=15, symmetries::AbstractSymmetryGroup=NoSymmetryGroup(g), dist::DistanceRecord=DistanceRecord(g,depth)) where D
     # The following errors are irrecoverable without changing the structure of the
     # algorithm to allow larger bitsets. Open an issue if required.
-    if any(>(62), degree(g))
-        error("A vertex has a degree too large (> 62) to be represented in a ConstMiniBitSet. Please open an issue.")
+    maxdeg = maximum(degree(g); init=0)
+    if maxdeg > 126
+        error("A vertex has a degree too large (> 127) to be represented in a ConstMiniBitSet. Please open an issue.")
     elseif depth > 62
-        error("Required depth is > 62 which cannot be handled with ConstMiniBitSet. Please open an issue.")
+        error("Required depth is > 62 which cannot be handled currently. Please open an issue.")
     end
     toexplore = sort!(no_neighboring_nodes(g, symmetries))
     ret = Vector{Int}[]
     visited = falses(nv(g))
     for x in toexplore
-        newrings = rings_around(g, x, depth, dist, visited)
+        newrings = if maxdeg < 7
+            rings_around(g, x, depth % UInt8, dist, visited)
+        elseif maxdeg < 15
+            rings_around(g, x, depth % UInt16, dist, visited)
+        elseif maxdeg < 31
+            rings_around(g, x, depth % UInt32, dist, visited)
+        elseif maxdeg < 63
+            rings_around(g, x, depth % UInt64, dist, visited)
+        else
+            rings_around(g, x, depth % UInt128, dist, visited)
+        end
         append!(ret, newrings)
         visited[x] = true
         for symm in symmetries
@@ -925,7 +952,7 @@ An edge-ring is a `Vector{Int}` where each element is the index of a pair of
 `PeriodicVertex{D}` stored `known_pairs`, representing an edge between the two vertices.
 Two consecutive edges in an edge-ring must share exactly one of their two vertices.
 """
-function sort_cycles(g::PeriodicGraph{D}, rs, depth=maximum(length, rs), (known_pairs, known_pairs_dict)=prepare_known_pairs(g)) where D
+function sort_cycles(g::PeriodicGraph{D}, rs, depth=maximum(length, rs; init=0), (known_pairs, known_pairs_dict)=prepare_known_pairs(g)) where D
     ofss = cages_around(g, 2)
     tot_ofss = length(ofss)
     cycles = Vector{Vector{Int}}(undef, tot_ofss * length(rs))
@@ -1017,41 +1044,67 @@ end
 symdiff_cycles(a, b) = symdiff_cycles!(Vector{Int}(undef, length(b) + length(a) - 1), a, b)
 
 
-struct IterativeGaussianElimination
+struct IterativeGaussianElimination{T<:Union{Vector{UInt8},Vector{Int32}}}
     rings::Vector{Vector{Int}} # The rows of the matrix, in sparse format
-    lengths::Vector{Int}
+    lengths::T # If Vector{UInt8} : lengths of the encountered cycles. Otherwise, tracks the added cycles.
     shortcuts::Vector{Int32} # verifies shortcuts[i] = 0 || rings[shortcuts[i]][1] == i
     buffer1::Vector{Int}
     buffer2::Vector{Int}
 end
-function IterativeGaussianElimination(ring::Vector{Int}, sizehint=ring[1])
+function IterativeGaussianElimination{T}(ring::Vector{Int}, sizehint=ring[1]) where T
     r1 = ring[1]
-    shortcuts = zeros(Int, sizehint)
+    shortcuts = zeros(Int, max(r1, sizehint))
     shortcuts[r1] = 1
     buffer = Vector{Int}(undef, length(r1))
-    IterativeGaussianElimination([ring], [length(ring)], shortcuts, buffer, similar(buffer))
+    lengths = T == Vector{UInt8} ? [length(ring) % UInt8] : T(undef, 30) # preallocation
+    IterativeGaussianElimination{T}([ring], lengths, shortcuts, buffer, similar(buffer))
 end
+
+const IterativeGaussianEliminationLength = IterativeGaussianElimination{Vector{UInt8}}
+IterativeGaussianElimination(ring, sizehint=ring[1]) = IterativeGaussianElimination{Vector{Int32}}(ring, sizehint)
 
 # For an IterativeGaussianElimination of i rings of size at most l, symdiff_cycles cost at
 # most (l + lenr) + (2l + lenr) + ... + (il + lenr) = O(i^2*l +i*lenr)
 # If the size of the k-th ring is at most k*l, then the worst-case complexity is O(i^3*l)
 # Calling gaussian_elimination ν times thus leads to a worst-case complexity in O(ν^4*l)
 # The reasonning can probably be refined...
-function gaussian_elimination!(gauss::IterativeGaussianElimination, r::Vector{Int})
+"""
+    gaussian_elimination!(gauss::IterativeGaussianElimination{T}, r::Vector{Int}) where T
+
+Test whether `r` can be expressed as a sum of vectors stored in `gauss`, and store `r` if
+not. "Sum" refers to the symmetric difference of boolean vectors, represented in sparse
+format as the ordered list of non-zero indices.
+
+If `T == Int32`, return `true` when `r` is such a sum. If so, the elements of the sum are
+stored in `gauss.lengths`.
+
+Otherwise, if `T == UInt8`, return whether `r` can be expressed as a sum of strictly
+smaller vectors.
+"""
+function gaussian_elimination!(gauss::IterativeGaussianElimination{T}, r::Vector{Int}) where T
     rings = gauss.rings
     lengths = gauss.lengths
     shortcuts = gauss.shortcuts
     buffer1::Vector{Int} = gauss.buffer1
     lenshort = length(shortcuts)
-    len = length(r)
+    tracklengths = T == Vector{UInt8}
+    if tracklengths
+        len = length(r) % UInt8
+    else
+        empty!(lengths)
+    end
     r1 = r[1]
 
     idx::Int32 = r1 > lenshort ? zero(Int32) : shortcuts[r1]
     if !iszero(idx)
         ridx = rings[idx]
-        maxlen = lengths[idx]
+        if tracklengths
+            maxlen = lengths[idx]
+        else
+            push!(lengths, idx)
+        end
         symdiff_cycles!(buffer1, r, ridx)
-        isempty(buffer1) && return maxlen < len # return false
+        isempty(buffer1) && return tracklengths ? maxlen < len : true
         r1 = buffer1[1]
         idx = r1 > lenshort ? zero(Int32) : shortcuts[r1]
         buffer2 = gauss.buffer2
@@ -1060,19 +1113,26 @@ function gaussian_elimination!(gauss::IterativeGaussianElimination, r::Vector{In
     end
     while !iszero(idx)
         ridx = rings[idx]
-        maxlen = max(lengths[idx], maxlen)
+        if tracklengths
+            maxlen = max(lengths[idx], maxlen)
+        else
+            push!(lengths, idx)
+        end
         symdiff_cycles!(buffer2, buffer1, ridx)
-        isempty(buffer2) && return maxlen < len # return false
+        isempty(buffer2) && return tracklengths ? maxlen < len : true
         r1 = buffer2[1]
         idx = r1 > lenshort ? zero(Int32) : shortcuts[r1]
         buffer2, buffer1 = buffer1, buffer2
     end
 
     push!(rings, copy(buffer1))
-    push!(lengths, len)
     r1 > length(shortcuts) && append!(shortcuts, zero(Int32) for _ in 1:(r1-length(shortcuts)))
     shortcuts[r1] = length(rings) % Int32
-    false # return true  # the new ring was independent from the other ones
+    if tracklengths
+        # the ring was not a sum of strictly smaller ones (since it's not a sum of previous ones at all)
+        push!(lengths, len)
+    end
+    false # the new ring was independent from the other ones
 end
 
 # function retrieve_vcycle(ecycle, known_pairs)
@@ -1109,7 +1169,7 @@ function strong_rings(rs::Vector{Vector{Int}}, g::PeriodicGraph{D}, depth=15, ri
         return Vector{Int}[], NoSymmetryGroup(0)
     end
     fst_ring = first(ecycles)
-    gauss = IterativeGaussianElimination(fst_ring)
+    gauss = IterativeGaussianEliminationLength(fst_ring)
     ret = Vector{Int}[]
     if ringsymms isa RingSymmetryGroup
         ringdict = Dict{Vector{Int},Int}()
