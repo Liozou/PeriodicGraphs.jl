@@ -853,12 +853,16 @@ function rings(g::PeriodicGraph{D}, depth=15, symmetries::AbstractSymmetryGroup=
     uniquerings = [[reverse_hash_position(x, g) for x in r] for r in ret]
     ringdict = Dict{Vector{Int},Int}()
     symmuniques = Int[]
+    toremove = Int[]
     for (idx, ring) in enumerate(uniquerings)
         nr = length(ring)
         resize!(buffer, nr)
-        newidx = get!(ringdict, ret[idx], idx)
-        if newidx == idx
-            push!(symmuniques, idx)
+        corrected_idx = idx - length(toremove)
+        newidx = get!(ringdict, ret[idx], corrected_idx)
+        if newidx == corrected_idx
+            push!(symmuniques, corrected_idx)
+        else
+            push!(toremove, idx)
         end
         for symm in symmetries
             #=@inbounds=# for i in 1:nr
@@ -872,6 +876,7 @@ function rings(g::PeriodicGraph{D}, depth=15, symmetries::AbstractSymmetryGroup=
             end
         end
     end
+    deleteat!(ret, toremove)
     return ret, RingSymmetryGroup{D}(ringdict, symmuniques, n, symmetries)
 end
 
@@ -1160,17 +1165,18 @@ end
 #     return ret
 # end
 
-function strong_rings(rs::Vector{Vector{Int}}, g::PeriodicGraph{D}, depth=15, ringsymms::AbstractSymmetryGroup=NoSymmetryGroup(length(rs))) where D
-    ecycles, origin = sort_cycles(g, rs, depth)
+function strong_erings(rs::Vector{Vector{Int}}, g::PeriodicGraph{D}, depth=15, ringsymms::AbstractSymmetryGroup=NoSymmetryGroup(length(rs))) where D
+    prepared_known_pairs = prepare_known_pairs(g)
+    ecycles, origin = sort_cycles(g, rs, depth, prepared_known_pairs)
     if isempty(ecycles)
         if ringsymms isa RingSymmetryGroup
-            return Vector{Int}[], RingSymmetryGroup{D}(Dict{Vector{Int},Int}(), Base.OneTo(0), nv(g), ringsymms.symms)
+            return Int[], RingSymmetryGroup{D}(Dict{Vector{Int},Int}(), Base.OneTo(0), nv(g), ringsymms.symms), Vector{Int}[], prepared_known_pairs
         end
-        return Vector{Int}[], NoSymmetryGroup(0)
+        return Int[], NoSymmetryGroup(0), Vector{Int}[], prepared_known_pairs
     end
     fst_ring = first(ecycles)
     gauss = IterativeGaussianEliminationLength(fst_ring)
-    ret = Vector{Int}[]
+    ret = Int[]
     if ringsymms isa RingSymmetryGroup
         ringdict = Dict{Vector{Int},Int}()
         ringmap = zeros(Int, last(unique(ringsymms)))
@@ -1178,7 +1184,7 @@ function strong_rings(rs::Vector{Vector{Int}}, g::PeriodicGraph{D}, depth=15, ri
     orig_1 = first(origin)
     if orig_1 != 0
         r1 = rs[orig_1]
-        push!(ret, r1)
+        push!(ret, 1)
         if ringsymms isa RingSymmetryGroup
             _rsymm1 = ringsymms(r1)
             rsymm1 = rs[_rsymm1]
@@ -1195,7 +1201,7 @@ function strong_rings(rs::Vector{Vector{Int}}, g::PeriodicGraph{D}, depth=15, ri
         onlysmallercycles && continue # cycle is a linear combination of smaller cycles
         if origin[i] != 0
             ri = rs[origin[i]]
-            push!(ret, ri)
+            push!(ret, i)
             if ringsymms isa RingSymmetryGroup
                 _rsymmi = ringsymms(ri)
                 rsymmi = rs[_rsymmi]
@@ -1210,10 +1216,23 @@ function strong_rings(rs::Vector{Vector{Int}}, g::PeriodicGraph{D}, depth=15, ri
             end
         end
     end
+    keepat!(origin, ret)
+    keepat!(ecycles, ret)
     if ringsymms isa RingSymmetryGroup
-        return ret, RingSymmetryGroup{D}(ringdict, Base.OneTo(counter), nv(g), ringsymms.symms)
+        return origin, RingSymmetryGroup{D}(ringdict, Base.OneTo(counter), nv(g), ringsymms.symms), ecycles, prepared_known_pairs
     end
-    return ret, NoSymmetryGroup(length(ret))
+    return origin, NoSymmetryGroup(length(ret)), ecycles, prepared_known_pairs
+end
+
+function strong_erings(g::PeriodicGraph, depth=15, symmetries::AbstractSymmetryGroup=NoSymmetryGroup(g), dist::DistanceRecord=DistanceRecord(g,depth))
+    rs, symmg = rings(g, depth, symmetries, dist)
+    return strong_erings(rs, g, depth, symmg)
+end
+
+
+function strong_rings(rs::Vector{Vector{Int}}, g::PeriodicGraph{D}, depth=15, ringsymms::AbstractSymmetryGroup=NoSymmetryGroup(length(rs))) where D
+    keep, symms = strong_erings(rs, g, depth, ringsymms)
+    return rs[keep], symms
 end
 
 """
