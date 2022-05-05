@@ -903,7 +903,7 @@ function cages_around(::PeriodicGraph{D}, depth) where D
     return ret
 end
 
-function find_known_pair!(known_pairs_dict, known_pairs, x)
+function find_known_pair!((known_pairs, known_pairs_dict), x)
     pairid = get!(known_pairs_dict, x, length(known_pairs)+1)
     pairid == length(known_pairs)+1 && push!(known_pairs, x)
     pairid
@@ -937,14 +937,28 @@ function unique_order(cycles)
 end
 
 
+const VertexPair{D} = Tuple{PeriodicVertex{D},PeriodicVertex{D}}
+
 function prepare_known_pairs(g::PeriodicGraph{D}) where D
-    known_pairs = Tuple{PeriodicVertex{D},PeriodicVertex{D}}[]
-    known_pairs_dict = Dict{Tuple{PeriodicVertex{D},PeriodicVertex{D}},Int}()
+    known_pairs = VertexPair{D}[]
+    known_pairs_dict = Dict{VertexPair{D},Int}()
     hintsize = 3^D*ne(g)^2
     sizehint!(known_pairs, hintsize)
     sizehint!(known_pairs_dict, hintsize)
     return (known_pairs, known_pairs_dict)
 end
+
+function convert_to_ering!(buffer, ring::Vector{PeriodicVertex{D}}, len, prepared_known_pairs, ofs) where D
+    _last_p = ring[len]
+    last_p = PeriodicVertex{D}(_last_p.v, _last_p.ofs .+ ofs)
+    for j in 1:len
+        _new_p = ring[j]
+        new_p = PeriodicVertex{D}(_new_p.v, _new_p.ofs .+ ofs)
+        buffer[j] = find_known_pair!(prepared_known_pairs, minmax(last_p, new_p))
+        last_p = new_p
+    end
+end
+
 
 """
     sort_cycles(g::PeriodicGraph{D}, rs, depth=maximum(length, rs), (known_pairs, known_pairs_dict)=prepare_known_pairs(g)) where D
@@ -957,7 +971,7 @@ An edge-ring is a `Vector{Int}` where each element is the index of a pair of
 `PeriodicVertex{D}` stored `known_pairs`, representing an edge between the two vertices.
 Two consecutive edges in an edge-ring must share exactly one of their two vertices.
 """
-function sort_cycles(g::PeriodicGraph{D}, rs, depth=maximum(length, rs; init=0), (known_pairs, known_pairs_dict)=prepare_known_pairs(g)) where D
+function sort_cycles(g::PeriodicGraph{D}, rs, depth=maximum(length, rs; init=0), prepared_known_pairs=prepare_known_pairs(g)) where D
     ofss = cages_around(g, 2)
     tot_ofss = length(ofss)
     cycles = Vector{Vector{Int}}(undef, tot_ofss * length(rs))
@@ -972,14 +986,7 @@ function sort_cycles(g::PeriodicGraph{D}, rs, depth=maximum(length, rs; init=0),
         end
         origin[base+zero_ofs] = i
         for (i_ofs, ofs) in enumerate(ofss)
-            _last_p = ringbuffer[length(ring)]
-            last_p = PeriodicVertex{D}(_last_p.v, _last_p.ofs .+ ofs)
-            for j in 1:length(ring)
-                _new_p = ringbuffer[j]
-                new_p = PeriodicVertex{D}(_new_p.v, _new_p.ofs .+ ofs)
-                buffer[j] = find_known_pair!(known_pairs_dict, known_pairs, minmax(last_p, new_p))
-                last_p = new_p
-            end
+            convert_to_ering!(buffer, ringbuffer, length(ring), prepared_known_pairs, ofs)
             cycles[base+i_ofs] = sort!(buffer[1:length(ring)])
         end
     end
@@ -1109,7 +1116,7 @@ function gaussian_elimination!(gauss::IterativeGaussianElimination{T}, r::Vector
             push!(lengths, idx)
         end
         symdiff_cycles!(buffer1, r, ridx)
-        isempty(buffer1) && return tracklengths ? maxlen < len : true
+        isempty(buffer1) && @goto notindependentreturn
         r1 = buffer1[1]
         idx = r1 > lenshort ? zero(Int32) : shortcuts[r1]
         buffer2 = gauss.buffer2
@@ -1124,7 +1131,7 @@ function gaussian_elimination!(gauss::IterativeGaussianElimination{T}, r::Vector
             push!(lengths, idx)
         end
         symdiff_cycles!(buffer2, buffer1, ridx)
-        isempty(buffer2) && return tracklengths ? maxlen < len : true
+        isempty(buffer2) && @goto notindependentreturn
         r1 = buffer2[1]
         idx = r1 > lenshort ? zero(Int32) : shortcuts[r1]
         buffer2, buffer1 = buffer1, buffer2
@@ -1137,7 +1144,12 @@ function gaussian_elimination!(gauss::IterativeGaussianElimination{T}, r::Vector
         # the ring was not a sum of strictly smaller ones (since it's not a sum of previous ones at all)
         push!(lengths, len)
     end
-    false # the new ring was independent from the other ones
+    return false # the new ring was independent from the other ones
+
+    @label notindependentreturn
+    tracklengths && return maxlen < len
+    push!(rings, gauss.buffer2) # dummy, used to keep track of dependent rings
+    return true
 end
 
 # function retrieve_vcycle(ecycle, known_pairs)
@@ -1226,7 +1238,8 @@ end
 
 function strong_erings(g::PeriodicGraph, depth=15, symmetries::AbstractSymmetryGroup=NoSymmetryGroup(g), dist::DistanceRecord=DistanceRecord(g,depth))
     rs, symmg = rings(g, depth, symmetries, dist)
-    return strong_erings(rs, g, depth, symmg)
+    keep, symms, erings, prepared_known_pairs = strong_erings(rs, g, depth, symmg)
+    return rs[keep], symms, erings, prepared_known_pairs
 end
 
 
