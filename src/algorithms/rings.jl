@@ -995,7 +995,7 @@ function sort_cycles(g::PeriodicGraph{D}, rs, depth=maximum(length, rs; init=0),
 end
 
 # Complexity O(len(a) + len(b))
-function symdiff_cycles!(c::Vector{Int}, a::Vector{Int}, b::Vector{Int})
+function symdiff_cycles!(c::Vector{T}, a::Vector{T}, b::Vector{T}) where T
     lenb = length(b)
     lena = length(a)
     if lena < lenb
@@ -1058,22 +1058,32 @@ symdiff_cycles(a, b) = symdiff_cycles!(Vector{Int}(undef, length(b) + length(a) 
 
 struct IterativeGaussianElimination{T}
     rings::Vector{Vector{Int}} # The rows of the matrix, in sparse format
-    lengths::T # If Vector{UInt8} : lengths of the encountered cycles. Otherwise, tracks the added cycles.
     shortcuts::Vector{Int32} # verifies shortcuts[i] = 0 || rings[shortcuts[i]][1] == i
     buffer1::Vector{Int}
     buffer2::Vector{Int}
+    track::T # If Vector{UInt8} : lengths of the encountered cycles. Otherwise, tracks the added cycles.
+end
+
+const IterativeGaussianEliminationLength = IterativeGaussianElimination{Vector{UInt8}}
+const IterativeGaussianEliminationDecomposition = IterativeGaussianElimination{Tuple{Vector{Int32},Vector{Vector{Int32}}}}
+const IterativeGaussianEliminationNone = IterativeGaussianElimination{Nothing}
+
+function IterativeGaussianElimination{T}() where T
+    track = T == Tuple{Vector{Int32},Vector{Vector{Int32}}} ? (Int32[],Vector{Int32}[]) : T()
+    IterativeGaussianElimination{T}(Vector{Int}[], Int32[], Int[], Int[], track)
 end
 function IterativeGaussianElimination{T}(ring::Vector{Int}, sizehint=ring[1]) where T
     r1 = ring[1]
     shortcuts = zeros(Int, max(r1, sizehint))
     shortcuts[r1] = 1
     buffer = Vector{Int}(undef, length(r1))
-    lengths = T == Vector{UInt8} ? [length(ring) % UInt8] : T()
-    IterativeGaussianElimination{T}([ring], lengths, shortcuts, buffer, similar(buffer))
+    track = T == Vector{UInt8} ? [length(ring) % UInt8] :
+            T == Tuple{Vector{Int32},Vector{Vector{Int32}}} ? (Int32[], [Int32[]]) : T()
+    IterativeGaussianElimination{T}([ring], shortcuts, buffer, similar(buffer), track)
 end
 
-const IterativeGaussianEliminationLength = IterativeGaussianElimination{Vector{UInt8}}
-IterativeGaussianElimination(ring, sizehint=ring[1]) = IterativeGaussianElimination{Vector{Int32}}(ring, sizehint)
+IterativeGaussianElimination(ring, sizehint=ring[1]) = IterativeGaussianEliminationNone(ring, sizehint)
+IterativeGaussianElimination() = IterativeGaussianEliminationNone()
 
 # For an IterativeGaussianElimination of i rings of size at most l, symdiff_cycles cost at
 # most (l + lenr) + (2l + lenr) + ... + (il + lenr) = O(i^2*l +i*lenr)
@@ -1081,29 +1091,33 @@ IterativeGaussianElimination(ring, sizehint=ring[1]) = IterativeGaussianEliminat
 # Calling gaussian_elimination ν times thus leads to a worst-case complexity in O(ν^4*l)
 # The reasonning can probably be refined...
 """
-    gaussian_elimination!(gauss::IterativeGaussianElimination{T}, r::Vector{Int}) where T
+    gaussian_elimination!(gauss::IterativeGaussianElimination, r::Vector{Int}) where T
 
 Test whether `r` can be expressed as a sum of vectors stored in `gauss`, and store `r` if
-not. "Sum" refers to the symmetric difference of boolean vectors, represented in sparse
+not. "sum" refers to the symmetric difference of boolean vectors, represented in sparse
 format as the ordered list of non-zero indices.
 
-If `T == Int32`, return `true` when `r` is such a sum. If so, the elements of the sum are
-stored in `gauss.lengths`.
+If `gauss isa IterativeGaussianEliminationLength`, return whether `r` can be expressed as a
+sum of strictly smaller vectors.
 
-Otherwise, if `T == UInt8`, return whether `r` can be expressed as a sum of strictly
-smaller vectors.
+Otherwise, return `true` when `r` is a sum of any previously encoutered vectors.
+If `gauss` isa `IterativeGaussianEliminationDecomposition`, query `retrieve_track(gauss)`
+to obtain the sorted list of indices of such previously encountered vectors.
 """
 function gaussian_elimination!(gauss::IterativeGaussianElimination{T}, r::Vector{Int}) where T
     rings = gauss.rings
-    lengths = gauss.lengths
     shortcuts = gauss.shortcuts
     buffer1::Vector{Int} = gauss.buffer1
+    buffer2::Vector{Int} = gauss.buffer2
     lenshort = length(shortcuts)
     tracklengths = T == Vector{UInt8}
+    dotrack = T == Tuple{Vector{Int32},Vector{Vector{Int32}}}
     if tracklengths
         len = length(r) % UInt8
-    else
-        empty!(lengths)
+        lengths = gauss.track
+    elseif dotrack
+        track = first(gauss.track)
+        empty!(track)
     end
     r1 = r[1]
 
@@ -1112,14 +1126,13 @@ function gaussian_elimination!(gauss::IterativeGaussianElimination{T}, r::Vector
         ridx = rings[idx]
         if tracklengths
             maxlen = lengths[idx]
-        else
-            push!(lengths, idx)
+        elseif dotrack
+            push!(track, idx)
         end
         symdiff_cycles!(buffer1, r, ridx)
         isempty(buffer1) && @goto notindependentreturn
         r1 = buffer1[1]
         idx = r1 > lenshort ? zero(Int32) : shortcuts[r1]
-        buffer2 = gauss.buffer2
     else
         buffer1 = r
     end
@@ -1127,8 +1140,8 @@ function gaussian_elimination!(gauss::IterativeGaussianElimination{T}, r::Vector
         ridx = rings[idx]
         if tracklengths
             maxlen = max(lengths[idx], maxlen)
-        else
-            push!(lengths, idx)
+        elseif dotrack
+            push!(track, idx)
         end
         symdiff_cycles!(buffer2, buffer1, ridx)
         isempty(buffer2) && @goto notindependentreturn
@@ -1143,14 +1156,46 @@ function gaussian_elimination!(gauss::IterativeGaussianElimination{T}, r::Vector
     if tracklengths
         # the ring was not a sum of strictly smaller ones (since it's not a sum of previous ones at all)
         push!(lengths, len)
+    elseif dotrack
+        push!(last(gauss.track), copy(sort!(track)))
     end
     return false # the new ring was independent from the other ones
 
     @label notindependentreturn
     tracklengths && return maxlen < len
-    push!(rings, gauss.buffer2) # dummy, used to keep track of dependent rings
+    if dotrack
+        push!(rings, buffer2) # dummy, used to keep track of dependent rings
+        push!(last(gauss.track), track) # also dummy
+    end
     return true
 end
+
+"""
+    retrieve_track!([ret::Vector{Int32}, buffer::Vector{Int32},] gauss::IterativeGaussianEliminationDecomposition)
+
+To be called consecutive to a call to `gaussian_elimination!(gauss, x)` that returned `true`.
+In that case, `x` was found to be the sum of previously encountered vectors: return the
+(reverse-sorted) list of their indices.
+
+!!! warning
+    Calling `retrieve_track!` after a call to `gaussian_elimination!` that returned `false`
+    will produce an invalid result.
+    Calling it twice will also produce an invalid result.
+"""
+function retrieve_track!(ret::Vector{Int32}, buffer::Vector{Int32}, gauss::IterativeGaussianEliminationDecomposition)
+    track = sort!(first(gauss.track))
+    tracks = last(gauss.track)
+    empty!(ret)
+    push!(ret, length(gauss.rings))
+    while !isempty(track)
+        x = pop!(track)
+        push!(ret, x)
+        symdiff_cycles!(buffer, track, tracks[x])
+        track, buffer = buffer, track
+    end
+    return ret
+end
+retrieve_track!(gauss::IterativeGaussianEliminationDecomposition) = retrieve_track!(Int32[], Int32[], gauss)
 
 # function retrieve_vcycle(ecycle, known_pairs)
 #     fst_pair = known_pairs[ecycle[1]]
