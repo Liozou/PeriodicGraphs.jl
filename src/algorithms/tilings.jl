@@ -1,3 +1,5 @@
+export Tiling, tilingof
+
 struct IdxWithOfs{D}
     idx::Int
     ofs::SVector{D,Int}
@@ -27,7 +29,7 @@ struct Tiling{D}
                 e = PeriodicEdge{D}(u1.v, u2.v, u2.ofs .- u1.ofs)
                 ringsofe = get!(ringsofedge, e, IdxWithOfs{D}[])
                 for idx in ringsofe
-                    newofs = idx.ofs .- u1.ofs # TODO: check
+                    newofs = u1.ofs - idx.ofs
                     if idx.idx != i || !iszero(newofs)
                         add_edge!(rgraph, i, PeriodicVertex{D}(idx.idx, newofs))
                     end
@@ -49,17 +51,18 @@ function cycle_at_pos(tiling::Tiling{D}, u::PeriodicVertex{D}) where D
 end
 
 function tiles_including_cycle(tiling::Tiling{D}, i) where D
-    gauss = IterativeGaussianElimination(tiling.erings[i])
+    gauss = IterativeGaussianEliminationDecomposition()
     encountered = Set{PeriodicVertex{D}}((PeriodicVertex{D}(i),))
-    Q = [(x, 1) for x in neighbors(tiling.rgraph, i)]
+    Q = [(PeriodicVertex{D}(i), 0)]
     maxdist = typemax(Int)
     tiles = Vector{PeriodicVertex{D}}[]
+    counter = 0
     for (u, dist) in Q
         dist > 40 && @show dist
         dist > maxdist && break
         if gaussian_elimination!(gauss, cycle_at_pos(tiling, u)) # a sum of previously encountered rings is empty
-            track = gauss.lengths
-            if i ∈ track
+            track = retrieve_track!(gauss)
+            if last(track) == 1
                 if !isempty(tiles) # TODO: refine to actually account for tiles on the two sides of cycle i
                     maxdist = dist # TODO: check that this is correct / desired
                 end
@@ -72,12 +75,11 @@ function tiles_including_cycle(tiling::Tiling{D}, i) where D
             push!(Q, (x, dist+1))
         end
     end
-    @show maxdist
-    @show tiles
+    tiles
 end
 
 
-function tiling(g::PeriodicGraph{D}, depth=15, symmetries::AbstractSymmetryGroup=NoSymmetryGroup(g), dist::DistanceRecord=DistanceRecord(g,depth)) where D
+function tilingof(g::PeriodicGraph{D}, depth=15, symmetries::AbstractSymmetryGroup=NoSymmetryGroup(g), dist::DistanceRecord=DistanceRecord(g,depth)) where D
     _rings, symms, erings, prepared_known_pairs = strong_erings(g, depth, symmetries, dist)
     rings = Vector{PeriodicVertex{D}}[[reverse_hash_position(x, g) for x in r] for r in _rings]
     tiling = Tiling{D}(rings, erings, prepared_known_pairs)

@@ -38,6 +38,7 @@ include("algorithms/neighborhood.jl")
 include("algorithms/dimensionality.jl")
 include("algorithms/other.jl")
 include("algorithms/rings.jl")
+include("algorithms/tilings.jl")
 
 include("precompile.jl")
 
