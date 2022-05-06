@@ -53,9 +53,12 @@ function _precompile_()
     @enforce Base.precompile(Tuple{typeof(PeriodicGraphs.symdiff_cycles), Vector{Int}, Vector{Int}})
     @enforce Base.precompile(Tuple{Type{PeriodicGraphs.IterativeGaussianEliminationLength}, Vector{Int}})
     @enforce Base.precompile(Tuple{Type{PeriodicGraphs.IterativeGaussianElimination{Vector{Int32}}}, Vector{Int}})
+    @enforce Base.precompile(Tuple{Type{PeriodicGraphs.IterativeGaussianElimination{Vector{Vector{Int32}}}}, Vector{Int}})
     @enforce Base.precompile(Tuple{Type{PeriodicGraphs.IterativeGaussianElimination}, Vector{Int}})
     @enforce Base.precompile(Tuple{typeof(PeriodicGraphs.gaussian_elimination!), PeriodicGraphs.IterativeGaussianEliminationLength, Vector{Int}})
-    @enforce Base.precompile(Tuple{typeof(PeriodicGraphs.gaussian_elimination!), PeriodicGraphs.IterativeGaussianElimination{Vector{Int32}}, Vector{Int}})
+    @enforce Base.precompile(Tuple{typeof(PeriodicGraphs.gaussian_elimination!), PeriodicGraphs.IterativeGaussianEliminationDecomposition, Vector{Int}})
+    @enforce Base.precompile(Tuple{typeof(PeriodicGraphs.gaussian_elimination!), PeriodicGraphs.IterativeGaussianEliminationNone, Vector{Int}})
+    @enforce Base.precompile(Tuple{typeof(PeriodicGraphs.retrieve_track!), PeriodicGraphs.IterativeGaussianEliminationDecomposition})
 
 
     for i in 0:3
