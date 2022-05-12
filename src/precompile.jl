@@ -60,6 +60,7 @@ function _precompile_()
     @enforce Base.precompile(Tuple{typeof(PeriodicGraphs.gaussian_elimination!), PeriodicGraphs.IterativeGaussianEliminationNone, Vector{Int}})
     @enforce Base.precompile(Tuple{typeof(PeriodicGraphs.retrieve_track!), PeriodicGraphs.IterativeGaussianEliminationDecomposition})
 
+    @enforce Base.precompile(Tuple{typeof(maximum), typeof(length), Vector{Vector{Int}}})
 
     for i in 0:3
         # Basic vertex and edge construction
@@ -206,8 +207,9 @@ function _precompile_()
         @enforce Base.precompile(Tuple{typeof(PeriodicGraphs.no_neighboring_nodes), PeriodicGraph{i}, nosymm})
         @enforce Base.precompile(Tuple{typeof(rings), PeriodicGraph{i}, Int, nosymm, dist})
         @enforce Base.precompile(Tuple{typeof(PeriodicGraphs.cages_around), PeriodicGraph{i}, Int})
-        @enforce Base.precompile(Tuple{typeof(PeriodicGraphs.prepare_known_pairs), PeriodicGraph{i}})
-        @enforce Base.precompile(Tuple{typeof(maximum), typeof(length), Vector{Vector{Int}}})
+        @enforce Base.precompile(Tuple{Type{PeriodicGraphs.EdgeDict}, PeriodicGraph{i}})
+        @enforce Base.precompile(Tuple{typeof(get!), PeriodicGraphs.EdgeDict{i}, PeriodicGraphs.VertexPair{i}})
+        @enforce Base.precompile(Tuple{typeof(getindex), PeriodicGraphs.EdgeDict{i}, Int})
         @enforce Base.precompile(Tuple{typeof(PeriodicGraphs.sort_cycles), PeriodicGraph{i}, Vector{Vector{Int}}, Int, Tuple{Vector{Tuple{PeriodicVertex{i},PeriodicVertex{i}}}, Dict{Tuple{PeriodicVertex{i},PeriodicVertex{i}},Int}}})
         @enforce Base.precompile(Tuple{typeof(PeriodicGraphs.sort_cycles), PeriodicGraph{i}, Vector{Vector{Int}}, Int})
         @enforce Base.precompile(Tuple{typeof(PeriodicGraphs.sort_cycles), PeriodicGraph{i}, Vector{Vector{Int}}})
