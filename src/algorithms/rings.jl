@@ -667,7 +667,21 @@ function normalize_cycle!(cycle::Vector{Int}, n, v::Val{D}) where D
             cycle[i] = hash_position(PeriodicVertex{D}(rev.v, rev.ofs .- ofsfst), n)
         end
     end
-    cycle
+    cycle, ofsfst
+end
+
+function normalize_cycle!(cycle::Vector{PeriodicVertex{D}}) where D
+    minval, fst = findmin(cycle)
+    lenc = length(cycle)
+    endreverse = cycle[mod1(fst-1, lenc)] > cycle[mod1(fst+1, lenc)]
+    if fst != 1 || !endreverse
+        reverse!(cycle, 1, fst - endreverse)
+        reverse!(cycle, fst - endreverse + 1, lenc)
+        endreverse && reverse!(cycle)
+    end
+    ofsfst = minval.ofs
+    iszero(ofsfst) || map!(c -> PeriodicVertex{D}(c.v, c.ofs - ofsfst), cycle, cycle)
+    cycle, ofsfst
 end
 
 
@@ -701,7 +715,7 @@ function rings_around(g::PeriodicGraph{D}, i, depth=15, dist::DistanceRecord=Dis
     for midnode in length(dag):-1:2
         for cycle in RingsEndingAt(dag, midnode, (dist, vertexnums))
         # for cycle in cycles_ending_at(dag, midnode, dist, vertexnums)
-            newcycle = normalize_cycle!(hashes[cycle], n, Val(D))
+            newcycle, _ = normalize_cycle!(hashes[cycle], n, Val(D))
             push!(ret, newcycle)
         end
     end
@@ -774,7 +788,7 @@ struct RingSymmetry{D,S<:AbstractSymmetry} <: AbstractSymmetry
 end
 function Base.getindex(rs::RingSymmetry{D}, ring::Vector{Int}) where D
     buffer = [hash_position(rs.symm[reverse_hash_position(r, rs.nvg, Val(D))], rs.nvg) for r in ring]
-    normalize_cycle!(buffer, rs.nvg, Val(D))
+    first(normalize_cycle!(buffer, rs.nvg, Val(D)))
 end
 
 struct RingSymmetryGroup{D,S,T<:AbstractSymmetryGroup{S},U} <: AbstractSymmetryGroup{RingSymmetry{D,S}}
@@ -903,11 +917,29 @@ function cages_around(::PeriodicGraph{D}, depth) where D
     return ret
 end
 
-function find_known_pair!((known_pairs, known_pairs_dict), x)
-    pairid = get!(known_pairs_dict, x, length(known_pairs)+1)
-    pairid == length(known_pairs)+1 && push!(known_pairs, x)
+const VertexPair{D} = Tuple{PeriodicVertex{D},PeriodicVertex{D}}
+struct EdgeDict{D}
+    direct::Vector{VertexPair{D}}
+    reverse::Dict{VertexPair{D},Int}
+end
+
+function EdgeDict(g::PeriodicGraph{D}) where D
+    known_pairs = VertexPair{D}[]
+    known_pairs_dict = Dict{VertexPair{D},Int}()
+    hintsize = 3^D*ne(g)^2
+    sizehint!(known_pairs, hintsize)
+    sizehint!(known_pairs_dict, hintsize)
+    return EdgeDict{D}(known_pairs, known_pairs_dict)
+end
+
+function Base.get!(kp::EdgeDict{D}, x::VertexPair{D}) where D
+    n = length(kp.direct) + 1
+    pairid = get!(kp.reverse, x, n)
+    pairid == n && push!(kp.direct, x)
     pairid
 end
+
+Base.getindex(kp::EdgeDict, i::Integer) = kp.direct[i]
 
 """
     unique_order(cycles)
@@ -937,41 +969,30 @@ function unique_order(cycles)
 end
 
 
-const VertexPair{D} = Tuple{PeriodicVertex{D},PeriodicVertex{D}}
-
-function prepare_known_pairs(g::PeriodicGraph{D}) where D
-    known_pairs = VertexPair{D}[]
-    known_pairs_dict = Dict{VertexPair{D},Int}()
-    hintsize = 3^D*ne(g)^2
-    sizehint!(known_pairs, hintsize)
-    sizehint!(known_pairs_dict, hintsize)
-    return (known_pairs, known_pairs_dict)
-end
-
-function convert_to_ering!(buffer, ring::Vector{PeriodicVertex{D}}, len, prepared_known_pairs, ofs) where D
+function convert_to_ering!(buffer, ring::Vector{PeriodicVertex{D}}, len, kp::EdgeDict{D}, ofs) where D
     _last_p = ring[len]
     last_p = PeriodicVertex{D}(_last_p.v, _last_p.ofs .+ ofs)
     for j in 1:len
         _new_p = ring[j]
         new_p = PeriodicVertex{D}(_new_p.v, _new_p.ofs .+ ofs)
-        buffer[j] = find_known_pair!(prepared_known_pairs, minmax(last_p, new_p))
+        buffer[j] = get!(kp, minmax(last_p, new_p))
         last_p = new_p
     end
 end
 
 
 """
-    sort_cycles(g::PeriodicGraph{D}, rs, depth=maximum(length, rs), (known_pairs, known_pairs_dict)=prepare_known_pairs(g)) where D
+    sort_cycles(g::PeriodicGraph{D}, rs, depth=maximum(length, rs), kp=EdgeDict(g)) where D
 
 Given a list `rs` of rings of `g` with at least one vertex in the origin unit cell, return
 a list of edge-rings that cross a unit cell up to distance 2 from the origin, as well as
 the indices of the corresponding rings in `rs`.
 
 An edge-ring is a `Vector{Int}` where each element is the index of a pair of
-`PeriodicVertex{D}` stored `known_pairs`, representing an edge between the two vertices.
+`PeriodicVertex{D}` stored in `kp`, representing an edge between the two vertices.
 Two consecutive edges in an edge-ring must share exactly one of their two vertices.
 """
-function sort_cycles(g::PeriodicGraph{D}, rs, depth=maximum(length, rs; init=0), prepared_known_pairs=prepare_known_pairs(g)) where D
+function sort_cycles(g::PeriodicGraph{D}, rs, depth=maximum(length, rs; init=0), kp=EdgeDict(g)) where D
     ofss = cages_around(g, 2)
     tot_ofss = length(ofss)
     cycles = Vector{Vector{Int}}(undef, tot_ofss * length(rs))
@@ -986,7 +1007,7 @@ function sort_cycles(g::PeriodicGraph{D}, rs, depth=maximum(length, rs; init=0),
         end
         origin[base+zero_ofs] = i
         for (i_ofs, ofs) in enumerate(ofss)
-            convert_to_ering!(buffer, ringbuffer, length(ring), prepared_known_pairs, ofs)
+            convert_to_ering!(buffer, ringbuffer, length(ring), kp, ofs)
             cycles[base+i_ofs] = sort!(buffer[1:length(ring)])
         end
     end
@@ -1223,13 +1244,13 @@ retrieve_track!(gauss::IterativeGaussianEliminationDecomposition) = retrieve_tra
 # end
 
 function strong_erings(rs::Vector{Vector{Int}}, g::PeriodicGraph{D}, depth=15, ringsymms::AbstractSymmetryGroup=NoSymmetryGroup(length(rs))) where D
-    prepared_known_pairs = prepare_known_pairs(g)
-    ecycles, origin = sort_cycles(g, rs, depth, prepared_known_pairs)
+    kp = EdgeDict(g)
+    ecycles, origin = sort_cycles(g, rs, depth, kp)
     if isempty(ecycles)
         if ringsymms isa RingSymmetryGroup
-            return Int[], RingSymmetryGroup{D}(Dict{Vector{Int},Int}(), Base.OneTo(0), nv(g), ringsymms.symms), Vector{Int}[], prepared_known_pairs
+            return Int[], RingSymmetryGroup{D}(Dict{Vector{Int},Int}(), Base.OneTo(0), nv(g), ringsymms.symms), Vector{Int}[], kp
         end
-        return Int[], NoSymmetryGroup(0), Vector{Int}[], prepared_known_pairs
+        return Int[], NoSymmetryGroup(0), Vector{Int}[], kp
     end
     fst_ring = first(ecycles)
     gauss = IterativeGaussianEliminationLength(fst_ring)
@@ -1276,15 +1297,15 @@ function strong_erings(rs::Vector{Vector{Int}}, g::PeriodicGraph{D}, depth=15, r
     keepat!(origin, ret)
     keepat!(ecycles, ret)
     if ringsymms isa RingSymmetryGroup
-        return origin, RingSymmetryGroup{D}(ringdict, Base.OneTo(counter), nv(g), ringsymms.symms), ecycles, prepared_known_pairs
+        return origin, RingSymmetryGroup{D}(ringdict, Base.OneTo(counter), nv(g), ringsymms.symms), ecycles, kp
     end
-    return origin, NoSymmetryGroup(length(ret)), ecycles, prepared_known_pairs
+    return origin, NoSymmetryGroup(length(ret)), ecycles, kp
 end
 
 function strong_erings(g::PeriodicGraph, depth=15, symmetries::AbstractSymmetryGroup=NoSymmetryGroup(g), dist::DistanceRecord=DistanceRecord(g,depth))
     rs, symmg = rings(g, depth, symmetries, dist)
-    keep, symms, erings, prepared_known_pairs = strong_erings(rs, g, depth, symmg)
-    return rs[keep], symms, erings, prepared_known_pairs
+    keep, symms, erings, kp = strong_erings(rs, g, depth, symmg)
+    return rs[keep], symms, erings, kp
 end
 
 
