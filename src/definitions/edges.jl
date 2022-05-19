@@ -122,10 +122,12 @@ See also [`directedge`](@ref)
 isindirectedge(e::PeriodicEdge) = e.src > e.dst.v || (e.src == e.dst.v && e.dst.ofs < zero(e.dst.ofs))
 
 """
-    directedge(e::PeriodicEdge)
+    directedge(e::PeriodicEdge{D}) where D
+    directedge(src::PeriodicVertex{D}, dst::PeriodicVertex{D}) where D
+    directedge(src, dst, ofs::Union{SVector{D,T},NTuple{D,T}}) where {D,T}
 
-Return the direct edge corresponding to `e`, i.e. `e` itself if `e` is direct, or
-`reverse(e)` otherwise.
+Return the direct edge corresponding to `e = PeriodicEdge{D}(src, dst)`, i.e. `e` itself if
+`e` is direct, or `reverse(e)` otherwise.
 
 ## Examples
 ```jldoctest
@@ -142,6 +144,14 @@ PeriodicEdge3D(3, 3, (0,1,-2))
 See also [`isindirectedge`](@ref)
 """
 directedge(e::PeriodicEdge) = isindirectedge(e) ? reverse(e) : e
+function directedge(src, dst, ofs::SVector{D,T}) where {D,T}
+    if src < dst || (src == dst && ofs > zero(SVector{D,T}))
+        return PeriodicEdge{D}(src, dst, ofs)
+    end
+    return PeriodicEdge{D}(dst, src, .-ofs)
+end
+directedge(src, dst, ofs::NTuple{D,T}) where {D,T} = directedge(src, dst, SVector{D,T}(ofs))
+directedge(src::PeriodicVertex, dst::PeriodicVertex) = directedge(src.v, dst.v, dst.ofs .- src.ofs)
 
 function cmp(x::PeriodicEdge{N}, y::PeriodicEdge{N}) where N
     c = cmp(x.src, y.src)
