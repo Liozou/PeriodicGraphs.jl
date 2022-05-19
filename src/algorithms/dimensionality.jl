@@ -203,7 +203,7 @@ function _dimensionality(g::PeriodicGraph{N}) where N
         recordedperiodicities = Set{SVector{N,Int}}()
         component = Dict{Int,SVector{N,Int}}(i => nullofs)
         seen = Set{PeriodicVertex{N}}([PeriodicVertex{N}(i)])
-        Q = PeriodicVertex[(PeriodicVertex{N}(i))]
+        Q = PeriodicVertex{N}[(PeriodicVertex{N}(i))]
         for src in Q
             @assert !visited[src.v]
             for dst in outneighbors(g, src.v)
