@@ -30,11 +30,11 @@ function is_well_formed(g::PeriodicGraph{N}) where N
         dedgestart = g.directedgestart[i]
         if dedgestart > length(l)
             dedgestart == length(l) + 1 || return false
-            PeriodicGraphs.isindirectedge(PeriodicEdge{N}(i, l[end])) || return false
+            isindirectedge(PeriodicEdge{N}(i, l[end])) || return false
             continue
         end
-        PeriodicGraphs.isindirectedge(PeriodicEdge{N}(i, l[dedgestart])) && return false
-        if dedgestart != 1 && !PeriodicGraphs.isindirectedge(PeriodicEdge{N}(i, l[dedgestart-1]))
+        isindirectedge(PeriodicEdge{N}(i, l[dedgestart])) && return false
+        if dedgestart != 1 && !isindirectedge(PeriodicEdge{N}(i, l[dedgestart-1]))
             return false
         end
         for j in dedgestart:length(l)
@@ -93,7 +93,8 @@ end
     @test PeriodicEdge(2, 1, ()) == PeriodicEdge{0}((2, 1, SVector{0,Int}()))
     @test PeriodicEdge((1, 2, (1,0,0))) == PeriodicEdge3D((1, 2, (1,0,0)))
     @test hash(PeriodicEdge((1, 2, (1,0,0)))) == hash(PeriodicEdge3D((1, 2, (1,0,0))))
-    @test hash(PeriodicEdge((1, 2, (1,)))) != hash(PeriodicEdge((2, 1, (-1,))))
+    @test hash(PeriodicEdge((1, 2, (-1,)))) != hash(PeriodicEdge((2, 1, (1,))))
+    @test directedge(PeriodicEdge((2, 1, (1,)))) == directedge(PeriodicEdge((1, 2, (-1,)))) == PeriodicEdge((1, 2, (-1,)))
     @test convert(PeriodicEdge, (3, PeriodicVertex{1}(2, (1,)))) == convert(PeriodicEdge1D, (3, PeriodicVertex{1}(2, (1,))))
     @test PeriodicEdge1D[(1,2,SVector{1,Int}(3))] == PeriodicEdge[(1,2,(3,))] == [PeriodicEdge(1, 2, (3,))]
     @test string(PeriodicEdge3D[(1, 2, (1,0,0))]) == "PeriodicEdge3D[(1, 2, (1,0,0))]"
