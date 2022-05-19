@@ -95,6 +95,8 @@ end
     @test hash(PeriodicEdge((1, 2, (1,0,0)))) == hash(PeriodicEdge3D((1, 2, (1,0,0))))
     @test hash(PeriodicEdge((1, 2, (-1,)))) != hash(PeriodicEdge((2, 1, (1,))))
     @test directedge(PeriodicEdge((2, 1, (1,)))) == directedge(PeriodicEdge((1, 2, (-1,)))) == PeriodicEdge((1, 2, (-1,)))
+    @test directedge(PeriodicVertex1D(3, (1,)), PeriodicVertex1D(2, (0,))) == PeriodicEdge(2, 3, (1,))
+    @test directedge(1, 1, (1, 0)) == directedge(1, 1, (-1, 0)) == PeriodicEdge(1, 1, (1, 0))
     @test convert(PeriodicEdge, (3, PeriodicVertex{1}(2, (1,)))) == convert(PeriodicEdge1D, (3, PeriodicVertex{1}(2, (1,))))
     @test PeriodicEdge1D[(1,2,SVector{1,Int}(3))] == PeriodicEdge[(1,2,(3,))] == [PeriodicEdge(1, 2, (3,))]
     @test string(PeriodicEdge3D[(1, 2, (1,0,0))]) == "PeriodicEdge3D[(1, 2, (1,0,0))]"
