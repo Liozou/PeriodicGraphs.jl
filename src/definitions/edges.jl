@@ -1,6 +1,7 @@
 # PeriodicEdge definition and basic functions
 
 export PeriodicEdge, PeriodicEdge1D, PeriodicEdge2D, PeriodicEdge3D
+export isindirectedge, directedge
 
 """
     LoopException <: Exception
@@ -95,7 +96,53 @@ The offset of a vertex or an edge.
 """
 ofs(v::PeriodicVertex) = v.ofs
 ofs(e::PeriodicEdge) = ofs(e.dst)
+
+"""
+    isindirectedge(e::PeriodicEdge)
+
+Return `true` if `e` is indirect, in the sense being of the form `(u, v, ofs)` with either
+`u < v` or `u == v && ofs < 0`.
+
+An edge `e` is indirect iff `reverse(e)` is not.
+
+## Examples
+```jldoctest
+julia> isindirectedge(PeriodicEdge1D(3, 4, (0,)))
+false
+
+julia> isindirectedge(PeriodicEdge2D(5, 2, (0,0)))
+true
+
+julia> isindirectedge(PeriodicEdge3D(3, 3, (0,-1,2)))
+true
+```
+
+See also [`directedge`](@ref)
+"""
 isindirectedge(e::PeriodicEdge) = e.src > e.dst.v || (e.src == e.dst.v && e.dst.ofs < zero(e.dst.ofs))
+
+"""
+    directedge(e::PeriodicEdge)
+
+Return the direct edge corresponding to `e`, i.e. `e` itself if `e` is direct, or
+`reverse(e)` otherwise.
+
+## Examples
+```jldoctest
+julia> directedge(PeriodicEdge1D(3, 4, (0,)))
+PeriodicEdge1D(3, 4, (0,))
+
+julia> directedge(PeriodicEdge2D(5, 2, (0,0)))
+PeriodicEdge2D(2, 5, (0,0))
+
+julia> directedge(PeriodicEdge3D(3, 3, (0,-1,2)))
+PeriodicEdge3D(3, 3, (0,1,-2))
+```
+
+See also [`isindirectedge`](@ref)
+"""
+directedge(e::PeriodicEdge) = isindirectedge(e) ? reverse(e) : e
+
 function cmp(x::PeriodicEdge{N}, y::PeriodicEdge{N}) where N
     c = cmp(x.src, y.src)
     iszero(c) || return c
