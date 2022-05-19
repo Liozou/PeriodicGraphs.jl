@@ -1011,7 +1011,7 @@ end
         id = symmweaks(str)
         for symm in symmweaks
             image = symm(str)
-            @test image == PeriodicGraphs.normalize_cycle!(copy(image), nv(lta), Val(3))
+            @test image == first(PeriodicGraphs.normalize_cycle!(copy(image), nv(lta), Val(3)))
             @test image ∈ weaks
             @test symmweaks(image) == id
         end
@@ -1022,7 +1022,7 @@ end
         id = symmstrs(str)
         for symm in symmstrs
             image = symm(str)
-            @test image == PeriodicGraphs.normalize_cycle!(copy(image), nv(lta), Val(3))
+            @test image == first(PeriodicGraphs.normalize_cycle!(copy(image), nv(lta), Val(3)))
             @test image ∈ strs
             @test symmstrs(image) == id
         end
