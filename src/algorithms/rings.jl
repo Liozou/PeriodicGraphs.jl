@@ -1056,7 +1056,7 @@ end
 symdiff_cycles(a, b) = symdiff_cycles!(Vector{Int}(undef, length(b) + length(a) - 1), a, b)
 
 
-struct IterativeGaussianElimination{T<:Union{Vector{UInt8},Vector{Int32}}}
+struct IterativeGaussianElimination{T}
     rings::Vector{Vector{Int}} # The rows of the matrix, in sparse format
     lengths::T # If Vector{UInt8} : lengths of the encountered cycles. Otherwise, tracks the added cycles.
     shortcuts::Vector{Int32} # verifies shortcuts[i] = 0 || rings[shortcuts[i]][1] == i
@@ -1068,7 +1068,7 @@ function IterativeGaussianElimination{T}(ring::Vector{Int}, sizehint=ring[1]) wh
     shortcuts = zeros(Int, max(r1, sizehint))
     shortcuts[r1] = 1
     buffer = Vector{Int}(undef, length(r1))
-    lengths = T == Vector{UInt8} ? [length(ring) % UInt8] : T(undef, 30) # preallocation
+    lengths = T == Vector{UInt8} ? [length(ring) % UInt8] : T()
     IterativeGaussianElimination{T}([ring], lengths, shortcuts, buffer, similar(buffer))
 end
 

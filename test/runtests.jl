@@ -836,12 +836,13 @@ end
     @test !PeriodicGraphs.gaussian_elimination!(gausstrack, [1, 3, 5])
     @test length(gausstrack.rings) == 4
     @test PeriodicGraphs.gaussian_elimination!(gausstrack, [1, 4, 5, 7])
-    @test gausstrack.lengths == Int32[4, 1]
+    @test issetequal(gausstrack.lengths, Int32[4, 1])
     @test !PeriodicGraphs.gaussian_elimination!(gausstrack, [3, 5, 6, 7])
     @test !PeriodicGraphs.gaussian_elimination!(gausstrack, [2, 3])
     @test !PeriodicGraphs.gaussian_elimination!(gausstrack, [1, 2, 3])
     @test PeriodicGraphs.gaussian_elimination!(gausstrack, [1, 2, 3])
-    @test gausstrack.lengths == Int32[4, 6, 1, 2, 5, 3, 7] == gausstrack.shortcuts
+    @test issetequal(gausstrack.lengths, Int32[4, 6, 1, 2, 5, 3, 7])
+    @test gausstrack.shortcuts == Int32[4, 6, 1, 2, 5, 3, 7]
 
      # keep track of the limitations
     @test_throws ErrorException rings(lta, 63)
