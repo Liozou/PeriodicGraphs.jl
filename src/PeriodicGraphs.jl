@@ -11,13 +11,11 @@ import Base: (==), isless, convert, show, showerror, eltype, iterate, zero,
 @static if VERSION < v"1.7.0-"
     # copied from Base without the bound checking
     function keepat!(a::Vector, inds)
-        local prev
         i = firstindex(a)
         for k in inds
             if i != k
                 @inbounds a[i] = a[k]
             end
-            prev = k
             i = nextind(a, i)
         end
         deleteat!(a, i:lastindex(a))

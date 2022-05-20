@@ -359,10 +359,10 @@ function _reorderinit(first_indices, verti, vertj::PeriodicVertex{D}) where D
     return verti.v, hash_position(PeriodicVertex{D}(vertj.v, vertj.ofs .- verti.ofs), n), counterij[1]
 end
 
-function init_distance_record!(dist, i, j)
+function init_distance_record!(dist::DistanceRecord{D}, i, j) where D
     dist.first_indices[i] = 1
-    g = dist.g
-    dist.Q_lists[i] = [(x, one(SmallIntType)) for x in neighbors(g, i)]
+    g::PeriodicGraph{D} = dist.g
+    dist.Q_lists[i] = Tuple{PeriodicVertex{D},SmallIntType}[(x, one(SmallIntType)) for x in neighbors(g, i)]
     _seen = Set{Int}(i)
     encountered = false
     n = nv(g)
@@ -1131,13 +1131,11 @@ function gaussian_elimination!(gauss::IterativeGaussianElimination{T}, r::Vector
     buffer1::Vector{Int} = gauss.buffer1
     buffer2::Vector{Int} = gauss.buffer2
     lenshort = length(shortcuts)
-    tracklengths = T == Vector{UInt8}
-    dotrack = T == Tuple{Vector{Int32},Vector{Vector{Int32}}}
-    if tracklengths
+    if gauss isa IterativeGaussianEliminationLength
         len = length(r) % UInt8
         lengths = gauss.track
-    elseif dotrack
-        track = first(gauss.track)
+    elseif gauss isa IterativeGaussianEliminationDecomposition
+        track::Vector{Int32} = first(gauss.track)
         empty!(track)
     end
     r1 = r[1]
@@ -1145,9 +1143,9 @@ function gaussian_elimination!(gauss::IterativeGaussianElimination{T}, r::Vector
     idx::Int32 = r1 > lenshort ? zero(Int32) : shortcuts[r1]
     if !iszero(idx)
         ridx = rings[idx]
-        if tracklengths
+        if gauss isa IterativeGaussianEliminationLength
             maxlen = lengths[idx]
-        elseif dotrack
+        elseif gauss isa IterativeGaussianEliminationDecomposition
             push!(track, idx)
         end
         symdiff_cycles!(buffer1, r, ridx)
@@ -1159,9 +1157,9 @@ function gaussian_elimination!(gauss::IterativeGaussianElimination{T}, r::Vector
     end
     while !iszero(idx)
         ridx = rings[idx]
-        if tracklengths
+        if gauss isa IterativeGaussianEliminationLength
             maxlen = max(lengths[idx], maxlen)
-        elseif dotrack
+        elseif gauss isa IterativeGaussianEliminationDecomposition
             push!(track, idx)
         end
         symdiff_cycles!(buffer2, buffer1, ridx)
@@ -1174,17 +1172,17 @@ function gaussian_elimination!(gauss::IterativeGaussianElimination{T}, r::Vector
     push!(rings, copy(buffer1))
     r1 > length(shortcuts) && append!(shortcuts, zero(Int32) for _ in 1:(r1-length(shortcuts)))
     shortcuts[r1] = length(rings) % Int32
-    if tracklengths
+    if gauss isa IterativeGaussianEliminationLength
         # the ring was not a sum of strictly smaller ones (since it's not a sum of previous ones at all)
         push!(lengths, len)
-    elseif dotrack
+    elseif gauss isa IterativeGaussianEliminationDecomposition
         push!(last(gauss.track), copy(sort!(track)))
     end
     return false # the new ring was independent from the other ones
 
     @label notindependentreturn
-    tracklengths && return maxlen < len
-    if dotrack
+    gauss isa IterativeGaussianEliminationLength && return maxlen < len
+    if gauss isa IterativeGaussianEliminationDecomposition
         push!(rings, buffer2) # dummy, used to keep track of dependent rings
         push!(last(gauss.track), track) # also dummy
     end

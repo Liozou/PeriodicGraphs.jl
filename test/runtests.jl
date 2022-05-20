@@ -1015,6 +1015,8 @@ end
         for symm in symmweaks
             image = symm(str)
             @test image == first(PeriodicGraphs.normalize_cycle!(copy(image), nv(lta), Val(3)))
+            imagevertices = [PeriodicGraphs.reverse_hash_position(x, lta) for x in image]
+            @test image == PeriodicGraphs.hash_position.(first(PeriodicGraphs.normalize_cycle!(imagevertices)), nv(lta))
             @test image ∈ weaks
             @test symmweaks(image) == id
         end
@@ -1026,6 +1028,8 @@ end
         for symm in symmstrs
             image = symm(str)
             @test image == first(PeriodicGraphs.normalize_cycle!(copy(image), nv(lta), Val(3)))
+            imagevertices = [PeriodicGraphs.reverse_hash_position(x, lta) for x in image]
+            @test image == PeriodicGraphs.hash_position.(first(PeriodicGraphs.normalize_cycle!(imagevertices)), nv(lta))
             @test image ∈ strs
             @test symmstrs(image) == id
         end
