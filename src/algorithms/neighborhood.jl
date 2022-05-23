@@ -22,14 +22,14 @@ the fields).
 function graph_width!(g::PeriodicGraph{N}) where N
     previous_width = g.width[]
     previous_width == -1 || return previous_width
-    distances = floyd_warshall_shortest_paths(cellgraph(g)).dists
+    distances = floyd_warshall_shortest_paths(truncated_graph(g)).dists
     extremalpoints = NTuple{N,NTuple{2,Vector{Tuple{Int,Int}}}}([([],[]) for _ in 1:N])
     # a, x ∈ extremalpoints[i][j] where i ∈ ⟦1,N⟧ and j ∈ ⟦1,2⟧ means that
     # vertex x has a neighbor whose offset is a*(-1)^(j-1) along dimension i
     maxa = 1
     for e in edges(g)
-        iszero(ofs(e)) && continue
-        offset = ofs(e)
+        _, (_, offset) = e
+        iszero(offset) && continue
         for i in 1:N
             iszero(offset[i]) && continue
             j = signbit(offset[i]) + 1
@@ -37,8 +37,8 @@ function graph_width!(g::PeriodicGraph{N}) where N
             if a > maxa
                 maxa = a
             end
-            push!(extremalpoints[i][j], (a, src(e)))
-            push!(extremalpoints[i][3-j], (a, dst(e)))
+            push!(extremalpoints[i][j], (a, e.src))
+            push!(extremalpoints[i][3-j], (a, e.dst.v))
         end
     end
 

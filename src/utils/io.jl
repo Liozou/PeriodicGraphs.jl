@@ -108,6 +108,24 @@ function _parse(::Type{PeriodicGraph{N}}, key::KeyString{Int})::PeriodicGraph{N}
     return from_edges(edges_from_string(key, Val(N)))
 end
 
+"""
+    parse(::Type{PeriodicGraph}, s::AbstractString)
+    parse(::Type{PeriodicGraph{N}}, s::AbstractString)
+
+Parse a string representation of a `PeriodicGraph` back to a `PeriodicGraph`.
+
+See `PeriodicGraph(key::AbstractString)` or `PeriodicGraph{N}(key::AbstractString)` for
+details on the string representations of a `PeriodicGraph`
+
+!!! warning
+    This function assumes that the string is a valid representation of a `PeriodicGraph`
+    with all its edges direct, sorted in lexicographical order and unique, as obtained
+    from `string(g)` or `print(g)` where `g` is a `PeriodicGraph`.
+    No check is performed to ensure this condition.
+
+    If the input string may not obey these conditions, use `PeriodicGraph(s)` or
+    `PeriodicGraph{N}(s)` instead.
+"""
 function Base.parse(::Type{PeriodicGraph{N}}, s::AbstractString) where N
     key = KeyString{Int}(s)
     popfirst!(key) # No verification is done for this function

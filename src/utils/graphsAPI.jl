@@ -44,7 +44,7 @@ function Graphs.has_edge(g::PeriodicGraph, e::PeriodicEdge)
     ((s < 1) | (s > nv(g))) && return false
     #=@inbounds=# begin
         start = g.directedgestart[s]
-        lo, hi = isindirectedge(e) ? (1, start-1) : (start, lastindex(g.nlist[s]))
+        lo, hi = isdirectedge(e) ? (start, lastindex(g.nlist[s])) : (1, start-1)
         i = searchsortedfirst(g.nlist[s], d, lo, hi, Forward)
         return i <= length(g.nlist[s]) && g.nlist[s][i] == d
     end
@@ -76,19 +76,19 @@ function _add_edge!(g::PeriodicGraph, e::PeriodicEdge, ::Val{check}) where check
         s, dst = e.src, e.dst
         neigh = g.nlist[s]
         start = g.directedgestart[s]
-        indirectedge = isindirectedge(e)
-        lo, hi = indirectedge ? (1, start-1) : (start, lastindex(neigh))
+        _directedge = isdirectedge(e)
+        lo, hi = _directedge ? (start, lastindex(neigh)) : (1, start-1)
         i = searchsortedfirst(neigh, dst, lo, hi, Forward)
         if check
             i <= length(neigh) && neigh[i] == dst && return false
         end
-        g.directedgestart[s] += indirectedge
+        g.directedgestart[s] += !_directedge
         insert!(neigh, i, dst)
         return true
     end
 end
 function Graphs.add_edge!(g::PeriodicGraph, e::PeriodicEdge)
-    (src(e) < 1 || src(e) > nv(g) || dst(e) < 1 || dst(e) > nv(g)) && return false
+    (e.src < 1 || e.src > nv(g) || e.dst.v < 1 || e.dst.v > nv(g)) && return false
     success = _add_edge!(g, e, Val(true)) && _add_edge!(g, reverse(e), Val(false))
     if success
         g.ne[] += 1
@@ -103,19 +103,19 @@ function _rem_edge!(g::PeriodicGraph, e::PeriodicEdge, ::Val{check}) where check
         s, dst = e.src, e.dst
         neigh = g.nlist[s]
         start = g.directedgestart[s]
-        indirectedge = isindirectedge(e)
-        lo, hi = indirectedge ? (1, start-1) : (start, lastindex(neigh))
+        _directedge = isdirectedge(e)
+        lo, hi = _directedge ? (start, lastindex(neigh)) : (1, start-1)
         i = searchsortedfirst(neigh, dst, lo, hi, Forward)
         if check
             i <= length(neigh) && neigh[i] == dst || return false
         end
-        g.directedgestart[s] -= indirectedge
+        g.directedgestart[s] -= !_directedge
         deleteat!(neigh, i)
         return true
     end
 end
 function Graphs.rem_edge!(g::PeriodicGraph, e::PeriodicEdge)
-    (src(e) < 1 || src(e) > nv(g) || dst(e) < 1 || dst(e) > nv(g)) && return false
+    (e.src < 1 || e.src > nv(g) || e.dst.v < 1 || e.dst.v > nv(g)) && return false
     success = _rem_edge!(g, e, Val(true)) && _rem_edge!(g, reverse(e), Val(false))
     if success
         g.ne[] -= 1
@@ -189,7 +189,7 @@ function Graphs.SimpleGraphs.rem_vertices!(g::PeriodicGraph{N}, t::AbstractVecto
             else
                 neigh = PeriodicVertex{N}(rev_vmap[x.v], x.ofs)
                 neighbors[k] = neigh
-                startoffset += isindirectedge(PeriodicEdge{N}(i, neigh))
+                startoffset += !isdirectedge(PeriodicEdge{N}(i, neigh))
             end
         end
         deleteat!(neighbors, remove_edges)
@@ -263,7 +263,7 @@ function vertex_permutation(g::PeriodicGraph{N}, vlist) where N
             dst = neighs[j]
             neigh = PeriodicVertex{N}(newvid[dst.v], dst.ofs)
             neighs[j] = neigh
-            startoffsets[i] += isindirectedge(PeriodicEdge{N}(i, neigh))
+            startoffsets[i] += !isdirectedge(PeriodicEdge{N}(i, neigh))
         end
         sort!(neighs)
     end
@@ -290,7 +290,7 @@ function Graphs.induced_subgraph(g::PeriodicGraph{N}, vlist::AbstractVector{U}) 
             iszero(v) && continue
             neigh = PeriodicVertex{N}(v, dst.ofs)
             push!(edges[i], neigh)
-            ne += isindirectedge(PeriodicEdge{N}(i, neigh))
+            ne += !isdirectedge(PeriodicEdge{N}(i, neigh))
         end
         startoffsets[i] = 1 + ne - startne
         sort!(edges[i])
@@ -300,24 +300,31 @@ end
 @noinline __throw_unique_vlist() = throw(ArgumentError("Vertices in subgraph list must be unique"))
 
 
-struct PeriodicNeighborList{D}
+"""
+    OffsetVertexIterator{D}
+    OffsetVertexIterator(ofs::SVector{D,Int}, list::AbstractVector{PeriodicVertex{D}}) where D
+
+Iterator type that yields the sequence of `PeriodicVertex` in `list`, each offset by the
+input `ofs`.
+"""
+struct OffsetVertexIterator{D}
     ofs::SVector{D,Int}
     nlist::Vector{PeriodicVertex{D}}
 end
-function iterate(x::PeriodicNeighborList{D}, state=1) where D
+function iterate(x::OffsetVertexIterator{D}, state=1) where D
     state > length(x.nlist) && return nothing
     neigh = @inbounds x.nlist[state]
     return (PeriodicVertex{D}(neigh.v, neigh.ofs .+ x.ofs), state+1)
 end
-length(x::PeriodicNeighborList{D}) where {D} = length(x.nlist)
-eltype(::Type{PeriodicNeighborList{D}}) where {D} = PeriodicVertex{D}
+length(x::OffsetVertexIterator{D}) where {D} = length(x.nlist)
+eltype(::Type{OffsetVertexIterator{D}}) where {D} = PeriodicVertex{D}
 
 for (neigh, deg) in ((:neighbors, :degree),
                      (:inneighbors, :indegree),
                      (:outneighbors, :outdegree))
     @eval begin
         function (Graphs.$neigh)(g::PeriodicGraph{D}, u::PeriodicVertex{D}) where D
-            PeriodicNeighborList{D}(u.ofs, g.nlist[u.v])
+            OffsetVertexIterator{D}(u.ofs, g.nlist[u.v])
         end
         function (Graphs.$deg)(g::PeriodicGraph{D}, u::PeriodicVertex{D}) where D
             length(($neigh)(g, u))
@@ -325,7 +332,7 @@ for (neigh, deg) in ((:neighbors, :degree),
     end
 end
 
-function show(io::IO, l::PeriodicNeighborList{D}) where D
+function show(io::IO, l::OffsetVertexIterator{D}) where D
     print(io, PeriodicVertex{D}, '[')
     join(IOContext(io, :typeinfo => PeriodicVertex{D}), l, ", ")
     print(io, ']')

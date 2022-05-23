@@ -1,7 +1,7 @@
 using Test
 using Graphs
 using PeriodicGraphs
-import PeriodicGraphs: ofs, vertex_permutation, dimensionality, LoopException, extended_gcd
+using PeriodicGraphs: vertex_permutation, LoopException, extended_gcd
 using StaticArrays: SVector, SMatrix
 using Combinatorics
 
@@ -30,11 +30,11 @@ function is_well_formed(g::PeriodicGraph{N}) where N
         dedgestart = g.directedgestart[i]
         if dedgestart > length(l)
             dedgestart == length(l) + 1 || return false
-            isindirectedge(PeriodicEdge{N}(i, l[end])) || return false
+            isdirectedge(PeriodicEdge{N}(i, l[end])) && return false
             continue
         end
-        isindirectedge(PeriodicEdge{N}(i, l[dedgestart])) && return false
-        if dedgestart != 1 && !isindirectedge(PeriodicEdge{N}(i, l[dedgestart-1]))
+        isdirectedge(PeriodicEdge{N}(i, l[dedgestart])) || return false
+        if dedgestart != 1 && isdirectedge(PeriodicEdge{N}(i, l[dedgestart-1]))
             return false
         end
         for j in dedgestart:length(l)
@@ -48,7 +48,8 @@ end
 
 @testset "PeriodicVertex" begin
     @test_throws MethodError PeriodicVertex2D() # Always require a vertex identifier
-    @test iszero(ofs(PeriodicVertex2D(1)))
+    _, ofs = PeriodicVertex2D(1)
+    @test iszero(ofs)
     @test ndims(PeriodicVertex2D(1)) == 2
     @test PeriodicVertex2D(1) != PeriodicVertex3D(1)
     @test PeriodicVertex{4}(5) == PeriodicVertex{4}(5)
@@ -68,7 +69,8 @@ end
     @test string(PeriodicVertex3D(12, (1,0,-1))) == "PeriodicVertex3D(12, (1,0,-1))"
     @test string(PeriodicVertex2D[(1, (0,0)), (1, (-1,0))]) == "PeriodicVertex2D[(1, (0,0)), (1, (-1,0))]"
     @test string(PeriodicVertex1D(2, (1,))) == "PeriodicVertex1D(2, (1,))"
-    @test ofs(PeriodicVertex(1, (2,1))) == SVector{2,Int}(2,1)
+    _, ofs2 = PeriodicVertex(1, (2,1))
+    @test ofs2 == SVector{2,Int}(2,1)
 end
 
 @testset "PeriodicEdge" begin
@@ -105,9 +107,8 @@ end
     @test reverse(reverse(PeriodicEdge(1, 1, (2,3,1)))) == PeriodicEdge3D(1, 1, (2,3,1))
     @test reverse(PeriodicEdge(1, 2, (1,-2))) == PeriodicEdge(2, 1, (-1,2))
     @test reverse(PeriodicEdge(3, 3, (1,0))) == PeriodicEdge(3, 3, (-1,0))
-    @test src(PeriodicEdge(1, 2, (-1, 0))) == 1
-    @test dst(PeriodicEdge(2, 2, (1,))) == 2
-    @test ofs(PeriodicEdge(1, 1, (0,1,3))) == SVector{3,Int}(0,1,3)
+    @test src(PeriodicEdge(1, 2, (-1, 0))) == PeriodicVertex2D(1)
+    @test dst(PeriodicEdge(2, 2, (1,))) == PeriodicVertex1D(2, (1,))
     @test PeriodicEdge2D(1, 1, (2,3)) < PeriodicEdge2D(1, 1, (3,0)) < PeriodicEdge2D(1, 2, (3,0)) < PeriodicEdge2D(2, 2, (3,0))
     @test cmp(PeriodicEdge{0}(2, 3, ()), PeriodicEdge(1, 3, ())) == 1
     @test cmp(PeriodicEdge2D(1, 1, (0,1)), PeriodicEdge(1, 3, (0,0))) == -1
@@ -462,8 +463,8 @@ end
 @testset "Graph reduction" begin
     g = PeriodicGraph3D("3  1 2  0 0 0  1 3  0 1 0   2 3  1 0 -1
                             4 4  0 0 1  4 5  0 -1 0  5 6  0 0 0")
-    c = cellgraph(g)
-    p = periodiccellgraph(g)
+    c = truncated_graph(g)
+    p = quotient_graph(g)
     @test nv(g) == nv(p) == nv(c)
     @test issubset(edges(c), edges(p))
     for e in edges(p)
@@ -474,65 +475,65 @@ end
 
 @testset "Periodic vertex hash" begin
     ## dim = 0
-    @test PeriodicGraphs.hash_position(SVector{0,Int}()) == 0
+    @test hash_position(SVector{0,Int}()) == 0
     ## dim = 1
-    @test PeriodicGraphs.hash_position(SVector{1,Int}(0)) == 0
-    @test PeriodicGraphs.hash_position(SVector{1,Int}(-1)) == 1
-    @test PeriodicGraphs.hash_position(SVector{1,Int}(1)) == 2
-    @test PeriodicGraphs.hash_position(SVector{1,Int}(-2)) == 3
-    @test PeriodicGraphs.hash_position(SVector{1,Int}(2)) == 4
-    @test PeriodicGraphs.hash_position(SVector{1,Int}(3)) == 6
+    @test hash_position(SVector{1,Int}(0)) == 0
+    @test hash_position(SVector{1,Int}(-1)) == 1
+    @test hash_position(SVector{1,Int}(1)) == 2
+    @test hash_position(SVector{1,Int}(-2)) == 3
+    @test hash_position(SVector{1,Int}(2)) == 4
+    @test hash_position(SVector{1,Int}(3)) == 6
     ## dim = 2
     n::Int = 4
     seen = falses((2n-1)^2)
     for i in -n+1:n-1, j in -n+1:n-1
-        x = PeriodicGraphs.hash_position(SVector{2,Int}(i,j))+1
+        x = hash_position(SVector{2,Int}(i,j))+1
         @test !seen[x]
         seen[x] = true
-        @test PeriodicGraphs.reverse_hash_position(x-1, Val(2)) == SVector{2,Int}(i,j)
+        @test reverse_hash_position(x-1, Val(2)) == SVector{2,Int}(i,j)
     end
     @test all(seen)
     append!(seen, falses((2n+1)^2-(2n-1)^2))
     for i in (-n,n), j in -n:n
-        x = PeriodicGraphs.hash_position(SVector{2,Int}(i,j))+1
+        x = hash_position(SVector{2,Int}(i,j))+1
         @test !seen[x]
         seen[x] = true
-        @test PeriodicGraphs.reverse_hash_position(x-1, Val(2)) == SVector{2,Int}(i,j)
+        @test reverse_hash_position(x-1, Val(2)) == SVector{2,Int}(i,j)
     end
     for i in -n+1:n-1, j in (-n,n)
-        x = PeriodicGraphs.hash_position(SVector{2,Int}(i,j))+1
+        x = hash_position(SVector{2,Int}(i,j))+1
         @test !seen[x]
         seen[x] = true
-        @test PeriodicGraphs.reverse_hash_position(x-1, Val(2)) == SVector{2,Int}(i,j)
+        @test reverse_hash_position(x-1, Val(2)) == SVector{2,Int}(i,j)
     end
     @test all(seen)
     ## dim = 3
     seen = falses((2n-1)^3)
     for i in -n+1:n-1, j in -n+1:n-1, k in -n+1:n-1
-        x = PeriodicGraphs.hash_position(SVector{3,Int}(i,j,k))+1
+        x = hash_position(SVector{3,Int}(i,j,k))+1
         @test !seen[x]
         seen[x] = true
-        @test PeriodicGraphs.reverse_hash_position(x-1, Val(3)) == SVector{3,Int}(i,j,k)
+        @test reverse_hash_position(x-1, Val(3)) == SVector{3,Int}(i,j,k)
     end
     @test all(seen)
     append!(seen, falses((2n+1)^3-(2n-1)^3))
     for i in (-n,n), j in -n:n, k in -n:n
-        x = PeriodicGraphs.hash_position(SVector{3,Int}(i,j,k))+1
+        x = hash_position(SVector{3,Int}(i,j,k))+1
         @test !seen[x]
         seen[x] = true
-        @test PeriodicGraphs.reverse_hash_position(x-1, Val(3)) == SVector{3,Int}(i,j,k)
+        @test reverse_hash_position(x-1, Val(3)) == SVector{3,Int}(i,j,k)
     end
     for i in -n+1:n-1, j in (-n,n), k in -n:n
-        x = PeriodicGraphs.hash_position(SVector{3,Int}(i,j,k))+1
+        x = hash_position(SVector{3,Int}(i,j,k))+1
         @test !seen[x]
         seen[x] = true
-        @test PeriodicGraphs.reverse_hash_position(x-1, Val(3)) == SVector{3,Int}(i,j,k)
+        @test reverse_hash_position(x-1, Val(3)) == SVector{3,Int}(i,j,k)
     end
     for i in -n+1:n-1, j in -n+1:n-1, k in (-n,n)
-        x = PeriodicGraphs.hash_position(SVector{3,Int}(i,j,k))+1
+        x = hash_position(SVector{3,Int}(i,j,k))+1
         @test !seen[x]
         seen[x] = true
-        @test PeriodicGraphs.reverse_hash_position(x-1, Val(3)) == SVector{3,Int}(i,j,k)
+        @test reverse_hash_position(x-1, Val(3)) == SVector{3,Int}(i,j,k)
     end
 
     @test all(seen)
@@ -540,9 +541,9 @@ end
     for x in (SVector{0,Int}(), SVector{1,Int}(47),
               SVector{2,Int}(9,3), SVector{2,Int}(13,-34),
               SVector{3,Int}(8,7,6), SVector{3,Int}(4,-8,-1), SVector{3,Int}(13,-10,24))
-        @test PeriodicGraphs.reverse_hash_position(PeriodicGraphs.hash_position(x), Val(length(x))) == x
+        @test reverse_hash_position(hash_position(x), Val(length(x))) == x
         y = PeriodicVertex(7, x)
-        @test PeriodicGraphs.reverse_hash_position(PeriodicGraphs.hash_position(y, 13), 13, Val(length(x))) == y
+        @test reverse_hash_position(hash_position(y, 13), 13, Val(length(x))) == y
     end
 
     g = PeriodicGraph3D([PeriodicEdge3D(1, 1, (0, 0, 1)),
@@ -815,7 +816,7 @@ end
     str_rings_mtn = string(rings_mtn)
     @test occursin("rings per node: [12", str_rings_mtn)
     @test occursin("15 rings containing vertex 7", string(rings_mtn[7]))
-    @test eltype(rings_mtn[1]) == PeriodicGraphs.PeriodicNeighborList{3}
+    @test eltype(rings_mtn[1]) == PeriodicGraphs.OffsetVertexIterator{3}
     @test isempty(rings(mtn, 0)[1])
     @test isempty(strong_rings(mtn, 0)[1])
 
@@ -1015,8 +1016,8 @@ end
         for symm in symmweaks
             image = symm(str)
             @test image == first(PeriodicGraphs.normalize_cycle!(copy(image), nv(lta), Val(3)))
-            imagevertices = [PeriodicGraphs.reverse_hash_position(x, lta) for x in image]
-            @test image == PeriodicGraphs.hash_position.(first(PeriodicGraphs.normalize_cycle!(imagevertices)), nv(lta))
+            imagevertices = [reverse_hash_position(x, lta) for x in image]
+            @test image == hash_position.(first(PeriodicGraphs.normalize_cycle!(imagevertices)), nv(lta))
             @test image ∈ weaks
             @test symmweaks(image) == id
         end
@@ -1028,8 +1029,8 @@ end
         for symm in symmstrs
             image = symm(str)
             @test image == first(PeriodicGraphs.normalize_cycle!(copy(image), nv(lta), Val(3)))
-            imagevertices = [PeriodicGraphs.reverse_hash_position(x, lta) for x in image]
-            @test image == PeriodicGraphs.hash_position.(first(PeriodicGraphs.normalize_cycle!(imagevertices)), nv(lta))
+            imagevertices = [reverse_hash_position(x, lta) for x in image]
+            @test image == hash_position.(first(PeriodicGraphs.normalize_cycle!(imagevertices)), nv(lta))
             @test image ∈ strs
             @test symmstrs(image) == id
         end

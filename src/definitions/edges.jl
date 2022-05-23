@@ -1,7 +1,7 @@
 # PeriodicEdge definition and basic functions
 
 export PeriodicEdge, PeriodicEdge1D, PeriodicEdge2D, PeriodicEdge3D
-export isindirectedge, directedge
+export isdirectedge, directedge
 
 """
     LoopException <: Exception
@@ -85,41 +85,32 @@ const PeriodicEdge3D = PeriodicEdge{3}
 function Graphs.reverse(e::PeriodicEdge{N}) where N
     return unsafe_edge{N}(e.dst.v, e.src, .-e.dst.ofs)
 end
-Graphs.src(e::PeriodicEdge) = e.src
-Graphs.dst(e::PeriodicEdge) = e.dst.v
+Graphs.src(e::PeriodicEdge{N}) where {N} = PeriodicVertex{N}(e.src)
+Graphs.dst(e::PeriodicEdge) = e.dst
 
 """
-    ofs(v::PeriodicVertex)
-    ofs(e::PeriodicEdge)
+    isdirectedge(e::PeriodicEdge)
 
-The offset of a vertex or an edge.
-"""
-ofs(v::PeriodicVertex) = v.ofs
-ofs(e::PeriodicEdge) = ofs(e.dst)
-
-"""
-    isindirectedge(e::PeriodicEdge)
-
-Return `true` if `e` is indirect, in the sense being of the form `(u, v, ofs)` with either
-`u < v` or `u == v && ofs < 0`.
+Return `true` if `e` is direct, in the sense being of the form `(u, v, ofs)` with either
+`u < v` or `u == v && ofs > zero(ofs)`.
 
 An edge `e` is indirect iff `reverse(e)` is not.
 
 ## Examples
 ```jldoctest
-julia> isindirectedge(PeriodicEdge1D(3, 4, (0,)))
+julia> isdirectedge(PeriodicEdge1D(3, 4, (0,)))
+true
+
+julia> isdirectedge(PeriodicEdge2D(5, 2, (0,0)))
 false
 
-julia> isindirectedge(PeriodicEdge2D(5, 2, (0,0)))
-true
-
-julia> isindirectedge(PeriodicEdge3D(3, 3, (0,-1,2)))
-true
+julia> isdirectedge(PeriodicEdge3D(3, 3, (0,-1,2)))
+false
 ```
 
 See also [`directedge`](@ref)
 """
-isindirectedge(e::PeriodicEdge) = e.src > e.dst.v || (e.src == e.dst.v && e.dst.ofs < zero(e.dst.ofs))
+isdirectedge(e::PeriodicEdge) = e.src < e.dst.v || (e.src == e.dst.v && e.dst.ofs > zero(e.dst.ofs))
 
 """
     directedge(e::PeriodicEdge{D}) where D
@@ -141,9 +132,9 @@ julia> directedge(PeriodicEdge3D(3, 3, (0,-1,2)))
 PeriodicEdge3D(3, 3, (0,1,-2))
 ```
 
-See also [`isindirectedge`](@ref)
+See also [`isdirectedge`](@ref)
 """
-directedge(e::PeriodicEdge) = isindirectedge(e) ? reverse(e) : e
+directedge(e::PeriodicEdge) = isdirectedge(e) ? e : reverse(e)
 function directedge(src, dst, ofs::SVector{D,T}) where {D,T}
     if src < dst || (src == dst && ofs > zero(SVector{D,T}))
         return PeriodicEdge{D}(src, dst, ofs)
@@ -163,3 +154,7 @@ isless(x::PeriodicEdge{N}, y::PeriodicEdge{N}) where {N} = cmp(x, y) < 0
 hash(x::PeriodicEdge, h::UInt) = hash(x.dst, hash(x.src, h))
 
 ndims(::PeriodicEdge{N}) where {N} = N
+
+iterate(x::PeriodicEdge, _::Val{1}=Val(1)) = (x.src, Val(2))
+iterate(x::PeriodicEdge, ::Val{2}) = (x.dst, nothing)
+iterate(::PeriodicEdge, ::Nothing) = nothing
