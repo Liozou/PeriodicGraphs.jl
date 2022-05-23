@@ -1396,10 +1396,10 @@ function Base.getindex(ri::RingIncluding{D}, j::Integer) where {D}
     newring_idx, idx = ri.ras.attrs[ri.i][j]
     newring = ri.ras.rings[newring_idx]
     ofs = newring[idx].ofs
-    return PeriodicNeighborList{D}(.-ofs, newring)
+    return OffsetVertexIterator{D}(.-ofs, newring)
 end
 Base.length(ri::RingIncluding) = length(ri.ras.attrs[ri.i])
-Base.eltype(::Type{RingIncluding{D}}) where {D} = PeriodicNeighborList{D}
+Base.eltype(::Type{RingIncluding{D}}) where {D} = OffsetVertexIterator{D}
 
 function Base.iterate(r::Union{RingAttributions,RingIncluding}, state=1)
     (state % UInt) - 1 < length(r) ? ((@inbounds r[state]), state+1) : nothing

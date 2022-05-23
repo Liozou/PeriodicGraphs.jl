@@ -8,8 +8,8 @@ This module allows to manipulate `N`-dimensional periodic graphs, using the new 
 
 The main difference with a simple graph is the notion of offset. Each vertex, of type `PeriodicVertex{N}` is uniquely defined using a numeric identifier (a positive integer, like for any simple graph) associated with the offset of the cell in which the designated vertex is, compared to a fixed reference cell. For instance, all vertices in the reference cell have a zero offset, and may be built like so:
 ```julia
-julia> PeriodicVertex{1}(1, (0))
-PeriodicVertex{1}(1, (0))
+julia> PeriodicVertex{1}(5, (-1,))
+PeriodicVertex{1}(5, (-1,))
 
 julia> PeriodicVertex{4}(2) # shorthand for the vertices of the reference cell
 PeriodicVertex{4}(2, (0,0,0,0))
@@ -21,18 +21,6 @@ An edge, of type `PeriodicEdge{N}`, is defined by its representative starting fr
 ```julia
 julia> PeriodicEdge{4}(2, PeriodicVertex{4}(3, (0,1,0,0)))
 PeriodicEdge{4}(2, 3, (0,1,0,0))
-
-julia> Graphs.src(PeriodicEdge{3}(5, 6, (1,0,2)))
-5
-
-julia> Graphs.dst(PeriodicEdge{3}(5, 6, (1,0,2)))
-6
-
-julia> PeriodicGraphs.ofs(PeriodicEdge{3}(5, 6, (1,0,2)))
-3-element StaticArrays.SVector{3,Int64} with indices SOneTo(3):
- 1
- 0
- 2
 
 julia> PeriodicEdge{2}(5, 5, (0,0))
 ERROR: LoopException: a loop from vertex 5 to itself in the same unit cell is a forbidden edges. Maybe the offset is wrong?

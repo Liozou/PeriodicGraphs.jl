@@ -1,6 +1,7 @@
 # PeriodicVertex definition and basic functions
 
 export PeriodicVertex, PeriodicVertex1D, PeriodicVertex2D, PeriodicVertex3D
+export hash_position, reverse_hash_position
 
 """
     PeriodicVertex{N}
@@ -47,6 +48,10 @@ const PeriodicVertex2D = PeriodicVertex{2}
 const PeriodicVertex3D = PeriodicVertex{3}
 
 ndims(::PeriodicVertex{N}) where {N} = N
+
+iterate(x::PeriodicVertex, _::Val{1}=Val(1)) = (x.v, Val(2))
+iterate(x::PeriodicVertex, ::Val{2}) = (x.ofs, nothing)
+iterate(::PeriodicVertex, ::Nothing) = nothing
 
 
 @inline ZtoN(x::Signed) = abs(2x + signbit(x)) # abs(bitrotate(x, 1)) # abs((x << 1) | (x >>> 63)) # (abs(x) << 1) - (x<0)

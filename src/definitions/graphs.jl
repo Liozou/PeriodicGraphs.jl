@@ -23,7 +23,7 @@ function PeriodicGraph{N}(ne::Integer, t, s) where N
 end
 
 """
-PeriodicGraph{N}(nv::Integer=0)
+    PeriodicGraph{N}(nv::Integer=0)
 
 Construct a `PeriodicGraph{N}` with `nv` vertices and 0 edge.
 """
@@ -123,7 +123,7 @@ julia> ne(g)
 """
 function PeriodicGraph{N}(nv::Integer, t::AbstractVector{PeriodicEdge{N}}) where N
     for (i, e) in enumerate(t)
-        if isindirectedge(e)
+        if !isdirectedge(e)
             t[i] = reverse(e)
         end
     end

@@ -1,6 +1,6 @@
 # Other utilities specific to periodic graphs
 
-export offset_representatives!, swap_axes!, cellgraph, periodiccellgraph
+export offset_representatives!, swap_axes!, truncated_graph, quotient_graph
 
 """
     offset_representatives!(g::PeriodicGraph, offsets)
@@ -23,7 +23,7 @@ function offset_representatives!(g::PeriodicGraph{N}, offsets) where N
             x = neighs[j]
             neigh = PeriodicVertex{N}(x.v, x.ofs .+ ofsi .- offsets[x.v])
             neighs[j] = neigh
-            startoffset += isindirectedge(PeriodicEdge{N}(i, neigh))
+            startoffset += !isdirectedge(PeriodicEdge{N}(i, neigh))
         end
         sort!(neighs)
         g.directedgestart[i] = startoffset
@@ -61,22 +61,22 @@ end
 @noinline __throw_invalid_axesswap() = throw(DimensionMismatch("The number of axes must match the dimension of the graph"))
 
 """
-    cellgraph(g::PeriodicGraph)
+    truncated_graph(g::PeriodicGraph)
 
 Extract a simple graph from `g` by only keeping the edges that are strictly
 within the initial cell.
 
-See also [`periodiccellgraph`](@ref) to keep these edges.
+See also [`quotient_graph`](@ref) to keep these edges.
 """
-function cellgraph(g::PeriodicGraph)
-    edgs = [Edge{Int}(src(x), dst(x)) for x in edges(g) if iszero(ofs(x))]
+function truncated_graph(g::PeriodicGraph)
+    edgs = [Edge{Int}(x.src, x.dst.v) for x in edges(g) if iszero(x.dst.ofs)]
     ret = SimpleGraph(edgs)
     add_vertices!(ret, nv(g) - nv(ret))
     return ret
 end
 
 """
-    periodiccellgraph(g::PeriodicGraph)
+    quotient_graph(g::PeriodicGraph)
 
 Extract a simple graph from `g` by removing all indications of offset in the edges.
 This means that edges that used to cross the boundaries of the initial cell now
@@ -85,9 +85,9 @@ the initial cell.
 
 Note that these modified edges may turn into loops.
 
-See also [`cellgraph`](@ref) to remove these edges.
+See also [`truncated_graph`](@ref) to remove these edges.
 """
-function periodiccellgraph(g::PeriodicGraph)
+function quotient_graph(g::PeriodicGraph)
     ret = SimpleGraph([Edge{Int}(i, j.v) for i in vertices(g) for j in outneighbors(g, i)])
     add_vertices!(ret, nv(g) - nv(ret))
     return ret
