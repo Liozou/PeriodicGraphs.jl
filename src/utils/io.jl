@@ -6,7 +6,8 @@ struct KeyString{T,S<:AbstractString}
 end
 function KeyString{T}(x) where T
     isempty(x) && return KeyString{T,typeof(x)}(x, Ref(1))
-    start = idx = firstindex(x)
+    start = firstindex(x)
+    idx = start
     this_char = first(x)
     while isspace(this_char)
         state = iterate(x, start)
@@ -21,7 +22,8 @@ function iterate(k::KeyString{T}, start) where T
     state = iterate(k.x, start)
     state isa Nothing && return nothing
     next_char, idx = state
-    stop = tmp = start
+    tmp = start
+    stop = start
     while next_char != '\0' && !isspace(next_char)
         state = iterate(k.x, idx)
         stop = tmp

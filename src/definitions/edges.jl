@@ -156,4 +156,4 @@ ndims(::PeriodicEdge{N}) where {N} = N
 
 iterate(x::PeriodicEdge, _::Val{1}=Val(1)) = (x.src, Val(2))
 iterate(x::PeriodicEdge, ::Val{2}) = (x.dst, nothing)
-iterate(::PeriodicEdge, ::Nothing) = nothing
+Base.last(e::PeriodicEdge) = e.dst
