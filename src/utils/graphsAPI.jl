@@ -241,7 +241,7 @@ end
 Return the `PeriodicGraph` corresponding to `g` with its vertices identifiers
 permuted according to `vlist`. `isperm(vlist)` must hold and will not be checked.
 
-See also [`induced_subgraph`](@ref) for the more general case where `vlist` is not a
+See also `Graphs.induced_subgraph` for the more general case where `vlist` is not a
 permutation.
 
 !!! note

@@ -780,11 +780,11 @@ end
         @test sort!(length.(rings_wno_r.rings)) == [fill(3, 12); 4; 4; 4; fill(5, 6); 6; 6; fill(7, 12)]
     end
 
-    rings_txt = RingAttributions(txt, false, 4)
+    rings_txt = RingAttributions(txt, 4)
     _r1 = [2; 1; 3:13]
     rings_txt_r1 = RingAttributions(txt[_r1], false, 4)
     _r2 = [1; 8; 3:7; 2; 9:13]
-    rings_txt_r2 = RingAttributions(txt[_r2], false, 4)
+    rings_txt_r2 = RingAttributions(txt[_r2], 4)
     _r3 = [1; 2; 8; 4:7; 3; 9:13]
     rings_txt_r3 = RingAttributions(txt[_r3], false, 4)
     @test length(rings_txt.rings) == length(rings_txt_r1.rings) == length(rings_txt_r2.rings) == length(rings_txt_r3.rings) == 1566
@@ -966,14 +966,14 @@ end
 
 @testset "Symmetry and rings" begin
     ras_sny2 = RingAttributions(sny, true, 2)
-    rasym_sny2 = RingAttributions(sny, true, 2, symmetries_sny) # test orig_1 with symmetries
+    rasym_sny2 = RingAttributions(sny, 2, symmetries_sny) # test orig_1 with symmetries
     @test length(ras_sny2) == length(rasym_sny2)
     for (r1, r2) in zip(ras_sny2, rasym_sny2)
         @test canonicalize_ri(r1) == canonicalize_ri(r2)
     end
 
     ras_sny6 = RingAttributions(sny, true, 6)
-    rasym_sny6 = RingAttributions(sny, true, 6, symmetries_sny)
+    rasym_sny6 = RingAttributions(sny, symmetries_sny)
     @test length(ras_sny6) == length(rasym_sny6)
     for (r1, r2) in zip(ras_sny6, rasym_sny6)
         @test canonicalize_ri(r1) == canonicalize_ri(r2)

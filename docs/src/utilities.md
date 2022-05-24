@@ -38,11 +38,21 @@ offset_representatives!
 
 Any `PeriodicGraph` can be naturally reduced to an aperiodic graph by removing all offsets
 from the edges and either keeping ([`quotient_graph`](@ref)) or removing
-([`truncated_graph](@ref)) edges crossing from one unit cell to another.
+([`truncated_graph`](@ref)) edges crossing from one unit cell to another.
 
 ```@docs
 quotient_graph
 truncated_graph
+```
+
+## Arithmetics
+
+These utilities are internally used for dimensionality computations, but may be useful in
+other contexts.
+
+```@docs
+PeriodicGraphs.extended_gcd
+PeriodicGraphs.normal_basis
 ```
 
 ## Unclassified other utilities

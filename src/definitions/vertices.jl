@@ -103,7 +103,7 @@ Given `x`, a `PeriodicVertex{N}`, and the number `n` of vertex identifiers in a 
 compute a unique positive integer hash for the given vertex.
 
 This hash function is a bijection between the set of all the vertices of the periodic graph
-and the set of positive integers. Its value is an integer between `1+n\\*(2d-1)^N`
+and the set of positive integers. Its value is an integer between `1+n*(2d-1)^N`
 (or `1` if `d == 0`) and `n*(2d+1)^N`, where `d = maximum(abs.(x.ofs))`.
 
 In particular, this means that when one unit cell B is further than another A from the
@@ -159,8 +159,8 @@ reverse_hash_position(::Integer, ::Val{0}) = SVector{0,Int}()
 """
     reverse_hash_position(hash::Integer, n::Integer, ::Val{N}) where N
 
-Given a `hash` obtained from `hash_position(x, n)` where `x` is a `PeriodicVertex{N}`,
-return the corresponding `x`.
+Given a `hash` obtained from [`hash_position`](@ref)`(x, n)` where `x` is a
+`PeriodicVertex{N}`, return the corresponding `x`.
 
 If the offset of the returned `PeriodicVertex` is not needed, simply doing `mod1(x, n)`
 yields the identifier of the vertex and is faster.
