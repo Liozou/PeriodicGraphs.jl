@@ -329,7 +329,10 @@ end
 
 @testset "String graph construction" begin
     @test_throws MethodError length(PeriodicGraphs.KeyString{Int}("3 1 2 0 0 0"))
-    @test PeriodicGraph("0 1 2 1 3") == PeriodicGraph(PeriodicEdge{0}[(1, 2, ()), (1, 3, ())])
+    @test isempty(PeriodicGraphs.KeyString{Int}("  "))
+    @test isempty(PeriodicGraphs.KeyString{Int}(""))
+    @test PeriodicGraph("0 1 2 1 3
+    ") == PeriodicGraph(PeriodicEdge{0}[(1, 2, ()), (1, 3, ())])
     @test PeriodicGraph("3") == PeriodicGraph3D("3") == PeriodicGraph3D()
     @test ne(PeriodicGraph("3  1 1  1 0 0  1 1 -1 0 0  1 1 3 0 0")) == 2
     @test nv(PeriodicGraph("2  11 12 0 0")) == 12
@@ -344,7 +347,7 @@ end
     @test_throws ArgumentError PeriodicGraph{4}("4 1")
     @test_throws ArgumentError PeriodicGraph("2 1 1 0 1 0")
     @test_throws LoopException PeriodicGraph("3 1 1 0 0 0")
-    g = PeriodicGraph("2 1 2 0 0 2 3 1 0")
+    g = PeriodicGraph(" 2 1 2 0 0 2 3 1 0  ")
     sg = string(g)
     @test sg == "2 1 2 0 0 2 3 1 0"
     @test parse(PeriodicGraph, sg) == g
@@ -977,7 +980,7 @@ end
     end
 
     ras_afi = RingAttributions(afi, true, 10)
-    rasym_afi = RingAttributions(afi, true, 10, symmetries_afi)
+    rasym_afi = RingAttributions(afi, true, symmetries_afi)
     @test length(ras_afi) == length(rasym_afi)
     for (r1, r2) in zip(ras_afi, rasym_afi)
         @test canonicalize_ri(r1) == canonicalize_ri(r2)
@@ -1022,7 +1025,7 @@ end
             @test symmweaks(image) == id
         end
     end
-    strs, symmstrs = rings(lta, 10, symmetries_lta)
+    strs, symmstrs = rings(lta, symmetries_lta)
     @test length(symmstrs) == length(symmetries_lta)
     for str in strs
         id = symmstrs(str)
