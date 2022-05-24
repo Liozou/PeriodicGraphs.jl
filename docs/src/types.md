@@ -14,12 +14,14 @@ A [`PeriodicGraph{N}`](@ref) `g` is the representation of an `N`-periodic graph.
 Each vertex has a unique representative, indexed from 1 to `n = nv(g)`.
 Each vertex `x` of the graph is represented by a [`PeriodicVertex{N}`](@ref) containing
 both the representative `v` and the offset `o` between the unit cell containing the vertex
-and a reference unit cell, accessible through the syntax `v, o = x`.
+and a reference unit cell, accessible through the syntax `v, o = x`, or with `v = first(x)`
+and `o = last(x)`.
 The offset is a `N`-uplet of integers, stored as a `SVector{N,Int}`.
 
 Each edge `e` is represented by a [`PeriodicEdge{N}`](@ref) defined by its source vertex
-inside the reference unit cell and of representative `src`, and its destination vertex
-`dst`, a `PeriodicVertex{N}`, which can be accessed through the syntax `src, dst = e`.
+inside the reference unit cell and of representative `s`, and its destination vertex `d`, a
+`PeriodicVertex{N}`, which can be accessed through the syntax `s, d = e`, or with
+`s = first(e)` and `d = last(e)` (or `d = Graphs.dst(e)`).
 
 For convenience, aliases are exported for 1D, 2D and 3D (`N = 1`, `N = 2` and `N = 3`)
 under the names `PeriodicGraph1D`, `PeriodicEdge2D`, `PeriodicVertex3D`, etc.

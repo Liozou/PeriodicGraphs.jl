@@ -48,8 +48,9 @@ end
 
 @testset "PeriodicVertex" begin
     @test_throws MethodError PeriodicVertex2D() # Always require a vertex identifier
-    _, ofs = PeriodicVertex2D(1)
-    @test iszero(ofs)
+    v, ofs = PeriodicVertex2D(1)
+    @test v == 1 && iszero(ofs)
+    @test v == first(PeriodicVertex3D(1, (3,4,5)))
     @test ndims(PeriodicVertex2D(1)) == 2
     @test PeriodicVertex2D(1) != PeriodicVertex3D(1)
     @test PeriodicVertex{4}(5) == PeriodicVertex{4}(5)
@@ -69,8 +70,7 @@ end
     @test string(PeriodicVertex3D(12, (1,0,-1))) == "PeriodicVertex3D(12, (1,0,-1))"
     @test string(PeriodicVertex2D[(1, (0,0)), (1, (-1,0))]) == "PeriodicVertex2D[(1, (0,0)), (1, (-1,0))]"
     @test string(PeriodicVertex1D(2, (1,))) == "PeriodicVertex1D(2, (1,))"
-    _, ofs2 = PeriodicVertex(1, (2,1))
-    @test ofs2 == SVector{2,Int}(2,1)
+    @test last(PeriodicVertex(1, (2,1))) == SVector{2,Int}(2,1)
 end
 
 @testset "PeriodicEdge" begin
@@ -108,13 +108,16 @@ end
     @test reverse(PeriodicEdge(1, 2, (1,-2))) == PeriodicEdge(2, 1, (-1,2))
     @test reverse(PeriodicEdge(3, 3, (1,0))) == PeriodicEdge(3, 3, (-1,0))
     @test src(PeriodicEdge(1, 2, (-1, 0))) == PeriodicVertex2D(1)
-    @test dst(PeriodicEdge(2, 2, (1,))) == PeriodicVertex1D(2, (1,))
+    @test first(PeriodicEdge(4, 3, ())) == 4
+    @test dst(PeriodicEdge(2, 2, (1,))) == last(PeriodicEdge(1, 2, (1,))) == PeriodicVertex1D(2, (1,))
+    _s, (_d, _ofs) = PeriodicEdge(12, 4, (-1,-2))
+    @test _s == 12 && _d == 4 && _ofs == [-1,-2]
     @test PeriodicEdge2D(1, 1, (2,3)) < PeriodicEdge2D(1, 1, (3,0)) < PeriodicEdge2D(1, 2, (3,0)) < PeriodicEdge2D(2, 2, (3,0))
     @test cmp(PeriodicEdge{0}(2, 3, ()), PeriodicEdge(1, 3, ())) == 1
     @test cmp(PeriodicEdge2D(1, 1, (0,1)), PeriodicEdge(1, 3, (0,0))) == -1
     @test cmp(PeriodicEdge2D(7, 7, (1,2)), PeriodicEdge(7, 7, (2,0))) == -1
     @test cmp(PeriodicEdge1D(1, 2, (0,)), PeriodicEdge(1, 2, (0,))) == 0
-    @test ndims(PeriodicEdge(1, 2, ())) == 0ndims(PeriodicEdge(1, 2, ())) == 0
+    @test ndims(PeriodicEdge(1, 2, ())) == 0
     @test ndims(PeriodicEdge(1, 1, (2,0,0,0))) == 4
 end
 
@@ -330,6 +333,7 @@ end
 @testset "String graph construction" begin
     @test_throws MethodError length(PeriodicGraphs.KeyString{Int}("3 1 2 0 0 0"))
     @test isempty(PeriodicGraphs.KeyString{Int}("  "))
+    @test_throws ArgumentError iterate(PeriodicGraphs.KeyString{Int}("  "), 1)
     @test isempty(PeriodicGraphs.KeyString{Int}(""))
     @test PeriodicGraph("0 1 2 1 3
     ") == PeriodicGraph(PeriodicEdge{0}[(1, 2, ()), (1, 3, ())])
@@ -823,6 +827,13 @@ end
     @test isempty(rings(mtn, 0)[1])
     @test isempty(strong_rings(mtn, 0)[1])
 
+    house = PeriodicGraph{0}("0  1 2  2 3  3 4  4 1
+                                 1 5  2 6  3 7  4 8
+                                 5 6  6 7  7 8  8 5
+                                 5 9  6 9  7 9  8 9   ");
+    @test length(rings(house, 5)[1]) == 14
+    @test length(strong_rings(house, 5)[1]) == 9
+
     @test PeriodicGraphs.symdiff_cycles([3,4], [3,5,6]) == PeriodicGraphs.symdiff_cycles([4,5,6,7,8], [7,8]) == [4,5,6]
 
     gausslengths = PeriodicGraphs.IterativeGaussianEliminationLength([3, 4, 7])
@@ -1012,7 +1023,7 @@ end
     @test triv[PeriodicVertex3D(14)] == PeriodicVertex3D(14)
     @test triv([1, 2, 4]) == [1, 2, 4]
 
-    weaks, symmweaks = rings(lta, 10, symmetries_lta)
+    weaks, symmweaks = rings(lta, symmetries_lta)
     @test length(symmweaks) == length(symmetries_lta)
     for str in weaks
         id = symmweaks(str)
@@ -1025,7 +1036,7 @@ end
             @test symmweaks(image) == id
         end
     end
-    strs, symmstrs = rings(lta, symmetries_lta)
+    strs, symmstrs = strong_rings(lta, symmetries_lta)
     @test length(symmstrs) == length(symmetries_lta)
     for str in strs
         id = symmstrs(str)
