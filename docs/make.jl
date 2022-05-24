@@ -1,7 +1,9 @@
 using Documenter
-using PeriodicGraphs
+using PeriodicGraphs, Graphs
 
-DocMeta.setdocmeta!(CrystalNets, :DocTestSetup, :(using PeriodicGraphs); recursive=true)
+DocMeta.setdocmeta!(PeriodicGraphs, :DocTestSetup, quote
+    using PeriodicGraphs, Graphs
+end; recursive=true)
 
 makedocs(
     sitename = "PeriodicGraphs.jl",

@@ -115,7 +115,7 @@ and does not contain any duplicates.
 julia> el = PeriodicEdge2D[(1, 1, (1,0)), (1, 3, (0,1)), (3, 1, (0,-1))];
 
 julia> g = PeriodicGraph(el)
-PeriodicGraph2D(3, PeriodicEdge2D[(1, 1, (1, 0)), (1, 3, (0, 1))])
+PeriodicGraph2D(3, PeriodicEdge2D[(1, 1, (1,0)), (1, 3, (0,1))])
 
 julia> ne(g)
 2

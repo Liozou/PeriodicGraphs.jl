@@ -8,8 +8,8 @@ export isdirectedge, directedge
 
 Error type for constructing an invalid `PeriodicEdge{N}` of the form (u, u, zeros(Int,N)).
 Loops are not expected in the algorithms implemented in PeriodicGraphs.jl. If you
-still want to construct them, use the `unsafe_edge{N}` constructor instead of
-`PeriodicEdge{N}``.
+still want to construct them, use the [`unsafe_edge{N}`](@ref) constructor instead of
+`PeriodicEdge{N}`.
 """
 struct LoopException <: Exception
     src::Int
@@ -21,7 +21,6 @@ showerror(io::IO, e::LoopException) = print(io, "LoopException: a loop from vert
     unsafe_edge{N}
 
 Internal constructor for `PeriodicEdge{N}` that bypasses the loop check.
-This function is not part of the official API, use with caution.
 """
 struct unsafe_edge{N} end
 

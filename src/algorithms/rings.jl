@@ -2,7 +2,11 @@
 
 export rings, strong_rings, RingAttributions
 
+"""
+    ConstMiniBitSet{T} <: AbstractSet{Int}
 
+Fixed-size bitset stored on a single word of type `T`, typically a `UInt64` or a `UInt32`.
+"""
 struct ConstMiniBitSet{T} <: AbstractSet{Int}
     x::T
     global _constminibitset(x::T) where {T} = new{T}(x)
@@ -814,23 +818,23 @@ Base.length(rsg::RingSymmetryGroup) = length(rsg.symms)
 Base.one(rsg::RingSymmetryGroup{D,S}) where {D,S} = RingSymmetry{D,S}(one(rsg.symms), rsg.nvg)
 
 """
-    rings(g::PeriodicGraph{D}, depth=15, symmetries::AbstractSymmetryGroup=NoSymmetryGroup(g), dist::DistanceRecord=DistanceRecord(g,depth)) where D
+    rings(g::PeriodicGraph{D}, [depth::Integer=15,] symmetries::AbstractSymmetryGroup=NoSymmetryGroup(g), dist::DistanceRecord=DistanceRecord(g,depth)) where D
 
 Compute the list of rings in `g`, up to length `2*depth+3`. Return the list of `Vector{Int}`
 where each sublist is a ring whose vertices are the `reverse_hash_position`s of the sublist
-elements. Also return an `AbstractSymmetryGroup` acting on the returned rings.
+elements. Also return an [`AbstractSymmetryGroup`](@ref) acting on the returned rings.
 
 A ring is a cycle of the graph for which there is no shortcut, i.e. no path in the graph
 between two vertices of the cycle that is shorter than either path connecting the vertices
 in the cycle.
 
 If provided, `symmetries` should represent the symmetries of the graph as a
-`AbstractSymmetryGroup` object respecting its documented interface.
+[`AbstractSymmetryGroup`](@ref) object respecting its documented interface.
 
-A `DistanceRecord` `dist` can be optionally provided to track the distances between pairs
-of vertices in the graph.
+A [`PeriodicGraphs.DistanceRecord`](@ref) `dist` can be optionally provided
+to track the distances between pairs of vertices in the graph.
 """
-function rings(g::PeriodicGraph{D}, depth=15, symmetries::AbstractSymmetryGroup=NoSymmetryGroup(g), dist::DistanceRecord=DistanceRecord(g,depth)) where D
+function rings(g::PeriodicGraph{D}, depth::Integer=15, symmetries::AbstractSymmetryGroup=NoSymmetryGroup(g), dist::DistanceRecord=DistanceRecord(g,depth)) where D
     # The following errors are irrecoverable without changing the structure of the
     # algorithm to allow larger bitsets. Open an issue if required.
     maxdeg = maximum(degree(g); init=0)
@@ -893,6 +897,9 @@ function rings(g::PeriodicGraph{D}, depth=15, symmetries::AbstractSymmetryGroup=
     deleteat!(ret, toremove)
     return ret, RingSymmetryGroup{D}(ringdict, symmuniques, n, symmetries)
 end
+function rings(g::PeriodicGraph{D}, symmetries::AbstractSymmetryGroup, dist::DistanceRecord=DistanceRecord(g,15)) where D
+    rings(g, 15, symmetries, dist)
+end
 
 # cycles(g::PeriodicGraph, depth=15, symmetries=NoSymmetryGroup(g)) = rings(g, depth, symmetries, nothing)
 
@@ -916,6 +923,7 @@ function cages_around(::PeriodicGraph{D}, depth) where D
     end
     return ret
 end
+cages_around(::PeriodicGraph{0}, _) = [SVector{0,Int}()]
 
 const VertexPair{D} = Tuple{PeriodicVertex{D},PeriodicVertex{D}}
 struct EdgeDict{D}
@@ -1077,6 +1085,20 @@ end
 symdiff_cycles(a, b) = symdiff_cycles!(Vector{Int}(undef, length(b) + length(a) - 1), a, b)
 
 
+"""
+    IterativeGaussianElimination{T}
+
+Struct containing the list of sparse columns of the matrix under gaussian elimination on
+the F₂ finite field.
+
+To be used with [`PeriodicGraphs.gaussian_elimination!`](@ref) as one of the three concrete
+types:
+- `PeriodicGraphs.IterativeGaussianEliminationNone` for simple gaussian elimination,
+- `PeriodicGraphs.IterativeGaussianEliminationLength` to detect when a new column can be
+  expressed as a sum of strictly smaller columns of the matrix.
+- `PeriodicGraphs.IterativeGaussianEliminationDecomposition` to detect when a new column
+  can be expressed as a sum of other columns of the matrix and keep track of which.
+"""
 struct IterativeGaussianElimination{T}
     rings::Vector{Vector{Int}} # The rows of the matrix, in sparse format
     shortcuts::Vector{Int32} # verifies shortcuts[i] = 0 || rings[shortcuts[i]][1] == i
@@ -1313,7 +1335,7 @@ function strong_rings(rs::Vector{Vector{Int}}, g::PeriodicGraph{D}, depth=15, ri
 end
 
 """
-    strong_rings(g::PeriodicGraph{D}, depth=15, symmetries::AbstractSymmetryGroup=NoSymmetryGroup(g), dist::DistanceRecord=DistanceRecord(g,depth)) where D
+    strong_rings(g::PeriodicGraph{D}, [depth::Integer=15,] symmetries::AbstractSymmetryGroup=NoSymmetryGroup(g), dist::DistanceRecord=DistanceRecord(g,depth)) where D
 
 Compute the list of strong rings in `g`, up to length `2*depth+3`. See [`rings`](@ref) for
 the meaning of the other arguments.
@@ -1322,9 +1344,12 @@ A strong ring is a cycle of the graph which cannot be decomposed into a sum of a
 of smaller cycles. By comparison, a ring is a cycle which cannot be decomposed into a sum
 of two smaller cycles. In particular, all strong rings are rings.
 """
-function strong_rings(g::PeriodicGraph, depth=15, symmetries::AbstractSymmetryGroup=NoSymmetryGroup(g), dist::DistanceRecord=DistanceRecord(g,depth))
+function strong_rings(g::PeriodicGraph, depth::Integer=15, symmetries::AbstractSymmetryGroup=NoSymmetryGroup(g), dist::DistanceRecord=DistanceRecord(g,depth))
     rs, symmg = rings(g, depth, symmetries, dist)
     return strong_rings(rs, g, depth, symmg)
+end
+function strong_rings(g::PeriodicGraph, symmetries::AbstractSymmetryGroup, dist::DistanceRecord=DistanceRecord(g,15))
+    strong_rings(g, 15, symmetries, dist)
 end
 
 
@@ -1356,16 +1381,25 @@ struct RingAttributions{D}
 end
 
 """
-    RingAttributions(g::PeriodicGraph{D}, strong=false, depth=15, symmetries::AbstractSymmetryGroup=NoSymmetryGroup(g), dist::DistanceRecord=DistanceRecord(g,depth)) where D
+    RingAttributions(g::PeriodicGraph{D}, [strong::Bool=false,] [depth::Integer=15,] symmetries::AbstractSymmetryGroup=NoSymmetryGroup(g), dist::DistanceRecord=DistanceRecord(g,depth)) where D
 
 Return the rings of `g` sorted into a `RingAttributions`.
 
 If `strong` is set, only the strong rings are kept.
 See [`rings`](@ref) for the meaning of the other arguments.
 """
-function RingAttributions(g::PeriodicGraph{D}, strong=false, depth=15, symmetries::AbstractSymmetryGroup=NoSymmetryGroup(g), dist::DistanceRecord=DistanceRecord(g,depth)) where D
+function RingAttributions(g::PeriodicGraph{D}, strong::Bool=false, depth::Integer=15, symmetries::AbstractSymmetryGroup=NoSymmetryGroup(g), dist::DistanceRecord=DistanceRecord(g,depth)) where D
     rs, _ = (strong ? strong_rings : rings)(g, depth, symmetries, dist)
     return RingAttributions{D}(nv(g), rs)
+end
+function RingAttributions(g::PeriodicGraph{D}, depth::Integer, symmetries::AbstractSymmetryGroup=NoSymmetryGroup(g), dist::DistanceRecord=DistanceRecord(g,depth)) where D
+    RingAttributions(g, false, depth, symmetries, dist)
+end
+function RingAttributions(g::PeriodicGraph{D}, strong::Bool, symmetries::AbstractSymmetryGroup, dist::DistanceRecord=DistanceRecord(g,15)) where D
+    RingAttributions(g, strong, 15, symmetries, dist)
+end
+function RingAttributions(g::PeriodicGraph{D}, symmetries::AbstractSymmetryGroup, dist::DistanceRecord=DistanceRecord(g,15)) where D
+    RingAttributions(g, false, 15, symmetries, dist)
 end
 
 Base.@propagate_inbounds function Base.getindex(ras::RingAttributions, i::Integer)
@@ -1385,8 +1419,8 @@ end
 The list of rings of a `PeriodicGraph{D}` including a particular vertex
 `PeriodicVertex{D}(i)`.
 
-The object is iterable and indexable by an integer, the returned `Vector{Int}` representing
-a cycle including the target vertex.
+The object is iterable and indexable by an integer: for `ri` of type `RingIncluding{D}`,
+`ri[j]` is an iterable over the vertices of the `j`-th ring including vertex `i`.
 """
 struct RingIncluding{D}
     ras::RingAttributions{D}

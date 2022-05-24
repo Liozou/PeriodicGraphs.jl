@@ -1,5 +1,12 @@
 # Basic types and definitions
 
+```@meta
+DocTestSetup = quote
+    using PeriodicGraphs, Graphs
+end
+DocTestFilters = r"Int.."
+```
+
 ## Introduction
 
 A [`PeriodicGraph{N}`](@ref) `g` is the representation of an `N`-periodic graph.
@@ -23,7 +30,7 @@ A `PeriodicVertex` can be built like so:
 
 ```jldoctest
 julia> PeriodicVertex1D(5, (-1,))
-PeriodicVertex1D(5, (-1))
+PeriodicVertex1D(5, (-1,))
 
 julia> PeriodicVertex{4}(2) # shorthand for the vertices of the reference cell
 PeriodicVertex{4}(2, (0,0,0,0))
@@ -58,11 +65,11 @@ julia> src, (dstv, ofs) = PeriodicEdge3D(5, 6, (1,0,2));
 julia> src
 5
 
-julia> dst
+julia> dstv
 6
 
 julia> ofs
-3-element StaticArrays.SVector{3,$Int} with indices SOneTo(3):
+3-element StaticArrays.SVector{3, Int64} with indices SOneTo(3):
  1
  0
  2
@@ -72,8 +79,8 @@ ERROR: LoopException: a loop from vertex 5 to itself in the same unit cell is a 
 ```
 
 Note that loops (that is, edges of the form `(u, u, (0,0,0,...,0))`) are forbidden and will
-throw a [`LoopException`](@ref) if created. To bypass this check, use the unexported
-[`unsafe_edge`](@ref) function.
+throw a [`PeriodicGraphs.LoopException`](@ref) if created.
+To bypass this check, use the unexported [`PeriodicGraphs.unsafe_edge`](@ref) function.
 
 ## `PeriodicGraph`
 

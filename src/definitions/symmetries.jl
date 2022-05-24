@@ -35,7 +35,7 @@ abstract type AbstractSymmetry end
 """
     IdentitySymmetry <: AbstractSymmetry
 
-Identity symmetry, i.e. such that for `s::IdentitySymmetry`, ∀`x``, `s[x] == x`.
+Identity symmetry, i.e. such that for `s::IdentitySymmetry`, ∀`x`, `s[x] == x`.
 """
 struct IdentitySymmetry <: AbstractSymmetry end
 Base.getindex(::IdentitySymmetry, x) = x
@@ -93,9 +93,9 @@ such that, for any `s` of type `<: AbstractSymmetryGroup{T}`:
   the orbit share the same representative. The representative should be an integer.
 - `unique(s)` is an iterator over such representatives.
 - iterating over `s` yields the list of symmetry operations `symm`, each represented as an
-  object of type `T` (where `T <: AbstractSymmetry` is the parameter to `typeof(s)`).
+  object of type `T` (where `T <: `[`AbstractSymmetry`](@ref) is the parameter to `typeof(s)`).
   The identity symmetry should not be part of these yielded `symm`, except for the
-  specific `IncludingIdentity` subtype of `AbstractSymmetryGroup`.
+  specific [`IncludingIdentity`](@ref) subtype of `AbstractSymmetryGroup`.
 - `one(s)` is the identity symmetry of type `T`.
 """
 abstract type AbstractSymmetryGroup{T<:AbstractSymmetry} end
@@ -104,7 +104,7 @@ Base.eltype(::Type{<:AbstractSymmetryGroup{T}}) where {T} = T
 """
     NoSymmetryGroup <: AbstractSymmetryGroup{IdentitySymmetry}
 
-The trivial `AbstractSymmetryGroup` devoid of any symmetry operation.
+The trivial [`AbstractSymmetryGroup`](@ref) devoid of any symmetry operation.
 `NoSymmetryGroup(num)` creates a `NoSymmetryGroup` over `num` unique representatives.
 """
 struct NoSymmetryGroup <: AbstractSymmetryGroup{IdentitySymmetry}
@@ -121,7 +121,8 @@ NoSymmetryGroup(g::PeriodicGraph) = NoSymmetryGroup(nv(g))
 """
     IncludingIdentity{S<:AbstractSymmetry,T<:AbstractSymmetryGroup{S}} <: AbstractSymmetryGroup{S}
 
-Wrapper around an `AbstractSymmetry` that explicitly includes the identity operation.
+Wrapper around an [`AbstractSymmetry`](@ref) that explicitly includes the identity
+operation.
 """
 struct IncludingIdentity{S<:AbstractSymmetry,T<:AbstractSymmetryGroup{S}} <: AbstractSymmetryGroup{S}
     symm::T

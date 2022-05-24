@@ -53,6 +53,9 @@ situation, it can be better to:
 2. replace `x ∈ visited` by `visited[hash_position(x, g)]` and
 3. replace `push!(x, visited)` by `visited[hash_position(x, g)] = true`
 
+Such algorithms can be used to compute the topological invariants like
+[`coordination_sequence`](@ref) for example.
+
 ## API
 
 ```@docs

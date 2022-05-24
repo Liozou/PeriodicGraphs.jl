@@ -8,16 +8,12 @@ export coordination_sequence
 Set the `width` internal field of the graph so that the for all `n` ∈ N\\*,
 the `n`-th neighbor of any vertex `v` of the initial cell is in a cell
 `(i_1, i_2, ..., i_N)` such that `max(abs.((i_1, i_2, ..., i_N))) ≤ 1 + fld((n - 1), width)`.
+Return the new `width`.
 
-This function is meant for internal use and will be used whenever the `width` field
-is required but unset. If you decide to modify the other internal fields of `g`,
-it is probably a good idea to do `g.width[] = -1` so that this function gets
-automatically called when needed, unless you are sure the width will not be
-affected by your change.
-
-It is never necessary to use this function or to touch the `width` field of the graph
-if you only modify the graph using the official API (i.e. if you never directly touch
-the fields).
+This function returns the current `width` if it is not equal to `-1` (internal value used
+to mark an unset `width`). If you decide to modify the other internal fields of `g`, it is
+probably a good idea to do `g.width[] = -1` so that this function gets automatically called
+when needed, unless you are sure the width will not be affected by your change.
 """
 function graph_width!(g::PeriodicGraph{N}) where N
     previous_width = g.width[]
