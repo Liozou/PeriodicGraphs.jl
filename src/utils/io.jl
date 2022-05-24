@@ -5,36 +5,57 @@ struct KeyString{T,S<:AbstractString}
     start::Base.RefValue{Int}
 end
 function KeyString{T}(x) where T
-    KeyString{T,typeof(x)}(x, Ref(firstindex(x)))
-end
-iterate(::KeyString, ::Nothing) = nothing
-function iterate(k::KeyString{T}, (next_char, idx)) where T
-    start = idx
-    state = nothing
-    while isspace(next_char)
-        state = iterate(k.x, idx)
-        state isa Nothing && return nothing
+    isempty(x) && return KeyString{T,typeof(x)}(x, Ref(1))
+    start = idx = firstindex(x)
+    this_char = first(x)
+    while isspace(this_char)
+        state = iterate(x, start)
+        state isa Nothing && return KeyString{T,typeof(x)}(x, Ref(idx))
         start = idx
-        next_char, idx = state
+        this_char, idx = state
     end
-    stop = start
-    tmp = idx
-    while !isspace(next_char)
+    KeyString{T,typeof(x)}(x, Ref(start))
+end
+
+function iterate(k::KeyString{T}, start) where T
+    state = iterate(k.x, start)
+    state isa Nothing && return nothing
+    next_char, idx = state
+    stop = tmp = start
+    while next_char != '\0' && !isspace(next_char)
         state = iterate(k.x, idx)
-        state isa Nothing && break
         stop = tmp
-        tmp = idx
-        next_char, idx = state
+        if state isa Nothing
+            next_char = '\0'
+        else
+            tmp = idx
+            next_char, idx = state
+        end
     end
     ret = tryparse(T, SubString(k.x, start:stop))
     if ret isa T
-        return (ret, state)
+        tmp = idx
+        while isspace(next_char)
+            state = iterate(k.x, tmp)
+            idx = tmp
+            if state isa Nothing
+                next_char = '\0'
+            else
+                next_char, tmp = state
+            end
+        end
+        return (ret, idx)
     end
     throw(ArgumentError("Input string does not represent a graph"))
 end
+
+Base.isempty(k::KeyString) = k.start[] > ncodeunits(k.x)
 function iterate(k::KeyString)
-    iterate(k, (' ', k.start[]))
+    start = k.start[]
+    start > ncodeunits(k.x) && return nothing
+    iterate(k, start)
 end
+
 function Base.popfirst!(k::KeyString)
     next = iterate(k)
     next isa Nothing && throw(ArgumentError("Input string does not represent a graph"))
@@ -42,7 +63,7 @@ function Base.popfirst!(k::KeyString)
     k.start[] = state isa Nothing ? (ncodeunits(k.x) + 1) : last(state)
     return char
 end
-Base.isempty(k::KeyString) = isempty(SubString(k.x, k.start[]))
+
 Base.IteratorSize(::Type{<:KeyString}) = Base.SizeUnknown()
 
 function edges_from_string(key::KeyString{Int}, ::Val{N}) where N
