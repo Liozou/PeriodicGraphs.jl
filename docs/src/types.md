@@ -123,13 +123,17 @@ julia> string(PeriodicGraph("2   1 2 0 0  2 3 0 0  3 1 0 0  3 1 1 0  2 1 0 1  2 
 PeriodicVertex
 PeriodicEdge
 PeriodicGraph
+PeriodicGraph{N}(nv::Integer=0) where N
+PeriodicGraph(nv::Integer, edge_list::AbstractVector{PeriodicEdge{N}}) where N
+PeriodicGraph{N}(s::AbstractString) where N
+Base.parse(::Type{PeriodicGraph{N}}, s::AbstractString) where N
 ```
 
-### Other essential functions
+### Other basic functions
 
 ```@docs
-PeriodicGraphs.unsafe_edge
-PeriodicGraphs.LoopException
 isdirectedge
 directedge
+PeriodicGraphs.unsafe_edge
+PeriodicGraphs.LoopException
 ```

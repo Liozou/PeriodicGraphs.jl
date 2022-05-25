@@ -166,7 +166,7 @@ function _precompile_()
         @enforce Base.precompile(Tuple{typeof(PeriodicGraphs._dimensionality),PeriodicGraph{i}})
         @enforce Base.precompile(Tuple{typeof(dimensionality),PeriodicGraph{i}})
         for j in 0:3
-            @enforce Base.precompile(Tuple{typeof(PeriodicGraphs.change_dimension),Type{PeriodicGraph{i}},PeriodicGraph{j}})
+            @enforce Base.precompile(Tuple{Type{PeriodicGraph{i}},PeriodicGraph{j}})
         end
 
         # Other utils

@@ -668,11 +668,11 @@ end
             4 1 0 0 1
             4 4 0 0 1")
     @test equivalent_dict(dimensionality(g), Dict(1 => [[1,2,3,4]]))
-    gg = change_dimension(PeriodicGraph1D, g)
+    gg = PeriodicGraph1D(g)
     @test string(gg) == "1 1 2 0 1 4 -1 2 3 0 3 4 0 4 4 1"
-    @test change_dimension(PeriodicGraph2D, gg) == change_dimension(PeriodicGraph2D, g) ==
+    @test PeriodicGraph2D(gg) == PeriodicGraph2D(g) ==
         PeriodicGraph("2 1 2 0 0 1 4 -1 0 2 3 0 0 3 4 0 0 4 4 1 0")
-    @test_throws DimensionMismatch change_dimension(PeriodicGraph{0}, g)
+    @test_throws DimensionMismatch PeriodicGraph{0}(g)
 
     s = [14,28,-17,-34,12]
     d, λ = extended_gcd(s)

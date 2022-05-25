@@ -15,12 +15,14 @@ The connected components of `g` can be separated and sorted by dimensionality us
 dimensionality
 ```
 
-To transpose a graph from one dimension to another use the [`change_dimension`](@ref)
-function. This can be useful to manipulate a graph of dimensionality `D` as a graph of
+To transpose a graph from one dimension `N` to another `D`, call the type constructor
+[`PeriodicGraph{D}`](@ref PeriodicGraph{D}(graph::PeriodicGraph{N}) where {D,N}) directly
+on `g::PeriodicGraph{N}`.
+This can be useful to manipulate a graph of dimensionality `D` as a graph of
 actual dimension `D`, which often reduces computational costs.
 
 ```@docs
-change_dimension
+PeriodicGraph{D}(graph::PeriodicGraph{N}, dims=_dimensionality(graph)) where {D,N}
 ```
 
 For example, the following function extracts the list of 1-dimensional components from a
@@ -30,7 +32,7 @@ given `PeriodicGraph`:
 julia> function extract_1D_components(g::PeriodicGraph{D}) where D
            d = dimensionality(g)
            components1D = get(d, 1, Vector{Int}[])
-           return [change_dimension(PeriodicGraph1D, g[l]) for l in components1D]
+           return [PeriodicGraph1D(g[l]) for l in components1D]
        end
 extract_1D_components (generic function with 1 method)
 ```

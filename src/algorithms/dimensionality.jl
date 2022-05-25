@@ -2,7 +2,7 @@ import Base.GMP.MPZ
 import LinearAlgebra: det
 using StaticArrays
 
-export dimensionality, change_dimension
+export dimensionality
 
 # Algorithm 3 from George Havas, Bohdan S. Majewski, and Keith R. Matthews,
 # "Extended GCD and Hermite Normal Form Algorithms via Lattice Basis Reduction"
@@ -249,7 +249,7 @@ end
 
 
 """
-    change_dimension(::Type{PeriodicGraph{D}}, graph::PeriodicGraph{N}) where {D,N}
+    PeriodicGraph{D}(graph::PeriodicGraph{N}) where {D,N}
 
 Return a graph that has the same structural information as the input `graph` but
 embedded in `D` dimensions instead of `N`. It will fail if the dimensionality of
@@ -260,7 +260,7 @@ the graph is greater than `D`.
     connected components. In particular, the function is expected to fail if these
     components do not share the same orientation.
 """
-function change_dimension(::Type{PeriodicGraph{D}}, graph::PeriodicGraph{N}, dims=_dimensionality(graph)) where {D,N}
+function PeriodicGraph{D}(graph::PeriodicGraph{N}, dims=_dimensionality(graph)) where {D,N}
     # We handle the trivial cases (where D ≥ N) first
     N == D && return graph
     n = ne(graph)
@@ -276,7 +276,7 @@ function change_dimension(::Type{PeriodicGraph{D}}, graph::PeriodicGraph{N}, dim
     # If D ≤ N, we have to find a new D-dimensional basis on which to project the edges
     d = maximum(keys(dims))
     if d > D
-        throw(DimensionMismatch("Graph of dimensionality $d cannot be reduced to $D dimensions."))
+        throw(DimensionMismatch("Graph of dimensionality $d cannot be reduced to dimension $D < $d."))
     end
     l::Vector{SVector{N,Int}} = @inbounds (first(dims[d])[2])
     # The vectors of l span the periodicity of the graph

@@ -132,13 +132,14 @@ function _parse(::Type{PeriodicGraph{N}}, key::KeyString{Int})::PeriodicGraph{N}
 end
 
 """
-    parse(::Type{PeriodicGraph}, s::AbstractString)
-    parse(::Type{PeriodicGraph{N}}, s::AbstractString)
+    parse(::Type{PeriodicGraph}, key::AbstractString)
+    parse(::Type{PeriodicGraph{N}}, key::AbstractString)
 
 Parse a string representation of a `PeriodicGraph` back to a `PeriodicGraph`.
 
-See `PeriodicGraph(key::AbstractString)` or `PeriodicGraph{N}(key::AbstractString)` for
-details on the string representations of a `PeriodicGraph`
+See [`PeriodicGraph(key::AbstractString)`](@ref PeriodicGraph{N}(key::AbstractString)) or
+[`PeriodicGraph{N}(key::AbstractString)`](@ref) for details on the string representations
+of a `PeriodicGraph`.
 
 !!! warning
     This function assumes that the string is a valid representation of a `PeriodicGraph`
@@ -146,8 +147,9 @@ details on the string representations of a `PeriodicGraph`
     from `string(g)` or `print(g)` where `g` is a `PeriodicGraph`.
     No check is performed to ensure this condition.
 
-    If the input string may not obey these conditions, use `PeriodicGraph(s)` or
-    `PeriodicGraph{N}(s)` instead.
+    If the input string may not obey these conditions, use
+    [`PeriodicGraph(key)`](@ref PeriodicGraph{N}(s::AbstractString)) or
+    [`PeriodicGraph{N}(key)`](@ref PeriodicGraph{N}(s::AbstractString)) instead.
 """
 function Base.parse(::Type{PeriodicGraph{N}}, s::AbstractString) where N
     key = KeyString{Int}(s)
