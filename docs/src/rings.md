@@ -128,32 +128,32 @@ PeriodicGraphs.RingIncluding{0}(4 rings containing vertex 9)
 
 julia> collect(roofpeak) # the list of rings including the top of the roof
 4-element Vector{PeriodicGraphs.OffsetVertexIterator{0}}:
- PeriodicVertex{0}[(5), (8), (9)]
- PeriodicVertex{0}[(5), (6), (9)]
- PeriodicVertex{0}[(7), (8), (9)]
- PeriodicVertex{0}[(6), (7), (9)]
+ PeriodicVertex{0}[5, 8, 9]
+ PeriodicVertex{0}[5, 6, 9]
+ PeriodicVertex{0}[7, 8, 9]
+ PeriodicVertex{0}[6, 7, 9]
 
 julia> collect(roofpeak[2]) # the second ring including the top of the roof
 3-element Vector{PeriodicVertex{0}}:
- (5)
- (6)
- (9)
+ 5
+ 6
+ 9
 
 julia> rasstrong = RingAttributions(house, true)
 RingAttributions{0}(rings per node: [3, 3, 3, 3, 4, 4, 4, 4, 4])
 
 julia> collect(rasstrong[1]) # the base and two walls make the strong rings around vertex 1
 3-element Vector{PeriodicGraphs.OffsetVertexIterator{0}}:
- PeriodicVertex{0}[(1), (2), (6), (5)]
- PeriodicVertex{0}[(1), (4), (8), (5)]
- PeriodicVertex{0}[(1), (2), (3), (4)]
+ PeriodicVertex{0}[1, 2, 6, 5]
+ PeriodicVertex{0}[1, 4, 8, 5]
+ PeriodicVertex{0}[1, 2, 3, 4]
 
 julia> collect(rasstrong[5]) # two rooftiles and two walls make the strong rings around vertex 5
 4-element Vector{PeriodicGraphs.OffsetVertexIterator{0}}:
- PeriodicVertex{0}[(5), (8), (9)]
- PeriodicVertex{0}[(5), (6), (9)]
- PeriodicVertex{0}[(1), (2), (6), (5)]
- PeriodicVertex{0}[(1), (4), (8), (5)]
+ PeriodicVertex{0}[5, 8, 9]
+ PeriodicVertex{0}[5, 6, 9]
+ PeriodicVertex{0}[1, 2, 6, 5]
+ PeriodicVertex{0}[1, 4, 8, 5]
 ```
 
 ## Internal API

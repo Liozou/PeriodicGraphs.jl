@@ -21,23 +21,31 @@ PeriodicVertex{N}(n::Integer) where {N} = PeriodicVertex{N}(n, zero(SVector{N,In
 PeriodicVertex(v::Integer, ofs::Union{SVector{N},NTuple{N}}) where {N} = PeriodicVertex{N}(v, ofs)
 
 function show(io::IO, x::PeriodicVertex{N}) where N
-    if get(io, :typeinfo, Any) != PeriodicVertex{N}
+    lacktypeinfo = get(io, :typeinfo, Any) != PeriodicVertex{N}
+    if lacktypeinfo
         print(io, PeriodicVertex{N})
     end
     if N == 0
-        print(io, '(', x.v, ')')
+        if lacktypeinfo
+            print(io, '(', x.v, ')')
+        else
+            print(io, x.v)
+        end
     else
         print(io, '(', x.v, ", (", join(x.ofs, ','))
         N == 1 && print(io, ',')
         print(io, ')', ')')
     end
 end
+
 function convert(::Type{PeriodicVertex{N}}, (dst, offset)::Tuple{Integer,Any}) where N
     PeriodicVertex{N}(dst, offset)
 end
 function convert(::Type{PeriodicVertex}, (dst, offset)::Tuple{Integer,Union{SVector{N},NTuple{N}}}) where N
     PeriodicVertex{N}(dst, offset)
 end
+convert(::Type{PeriodicVertex{0}}, dst::Integer) = PeriodicVertex{0}(dst)
+
 function cmp(x::PeriodicVertex{N}, y::PeriodicVertex{N}) where N
     c = cmp(x.v, y.v)
     iszero(c) || return c
