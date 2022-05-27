@@ -24,9 +24,13 @@ function show(io::IO, x::PeriodicVertex{N}) where N
     if get(io, :typeinfo, Any) != PeriodicVertex{N}
         print(io, PeriodicVertex{N})
     end
-    print(io, '(', x.v, ", (", join(x.ofs, ','))
-    N == 1 && print(io, ',')
-    print(io, ')', ')')
+    if N == 0
+        print(io, '(', x.v, ')')
+    else
+        print(io, '(', x.v, ", (", join(x.ofs, ','))
+        N == 1 && print(io, ',')
+        print(io, ')', ')')
+    end
 end
 function convert(::Type{PeriodicVertex{N}}, (dst, offset)::Tuple{Integer,Any}) where N
     PeriodicVertex{N}(dst, offset)

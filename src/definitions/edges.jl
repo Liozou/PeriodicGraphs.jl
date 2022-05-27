@@ -48,33 +48,46 @@ PeriodicEdge(src, dst::PeriodicVertex{N}) where {N} = PeriodicEdge{N}(src, dst)
 function PeriodicEdge{N}(src, dst, offset) where N
     return PeriodicEdge{N}(src, PeriodicVertex{N}(dst, offset))
 end
-function PeriodicEdge(src, dst, offset::Union{SVector{N,T},NTuple{N,T}}) where {N,T}
+function PeriodicEdge(src, dst, offset::Union{SVector{N},NTuple{N}}) where N
     PeriodicEdge{N}(src, dst, offset)
 end
-function PeriodicEdge{N}((src, dst, offset)::Tuple{Any,Any,Union{SVector{N,T},NTuple{N,T}}}) where {N,T<:Integer}
+function PeriodicEdge{N}((src, dst, offset)::Tuple{Any,Any,Union{SVector{N},NTuple{N}}}) where N
     PeriodicEdge{N}(src, dst, offset)
 end
-function PeriodicEdge((src, dst, offset)::Tuple{Any,Any,Union{SVector{N,T},NTuple{N,T}}}) where {N,T<:Integer}
+function PeriodicEdge((src, dst, offset)::Tuple{Any,Any,Union{SVector{N},NTuple{N}}}) where N
     PeriodicEdge{N}(src, dst, offset)
 end
 
-function convert(::Type{PeriodicEdge{N}}, (src, dst, offset)::Tuple{Any,Any,Any}) where {N}
+function PeriodicEdge{0}(src, dst::PeriodicVertex{0})
+    src == dst.v && __throw_loopexception(src)
+    return unsafe_edge{0}(src, dst)
+end
+PeriodicEdge{0}(src, dst) = PeriodicEdge{0}(src, PeriodicVertex{0}(dst))
+PeriodicEdge{0}((src, dst)::Tuple{Any,Any}) = PeriodicEdge{0}(src, dst)
+
+function convert(::Type{PeriodicEdge{N}}, (src, dst, offset)::Tuple{Any,Any,Any}) where N
     PeriodicEdge{N}(src, dst, offset)
 end
-function convert(::Type{PeriodicEdge}, (src, dst, offset)::Tuple{Any,Any,Union{SVector{N,T},NTuple{N,T}}}) where {N,T<:Integer}
+function convert(::Type{PeriodicEdge}, (src, dst, offset)::Tuple{Any,Any,Union{SVector{N},NTuple{N}}}) where N
     PeriodicEdge{N}(src, dst, offset)
 end
 function convert(::Union{Type{PeriodicEdge},Type{PeriodicEdge{N}}}, (src, v)::Tuple{Any,PeriodicVertex{N}}) where N
     PeriodicEdge{N}(src, v)
 end
+convert(::Type{PeriodicEdge{0}}, (src, v)::Tuple{Any,PeriodicVertex{0}}) = PeriodicEdge{0}(src, v)
+convert(::Type{PeriodicEdge{0}}, (src, dst)::Tuple{Any,Any}) = PeriodicEdge{0}(src, dst)
 
 function show(io::IO, x::PeriodicEdge{N}) where N
     if get(io, :typeinfo, Any) != PeriodicEdge{N}
         print(io, PeriodicEdge{N})
     end
-    print(io, '(', x.src, ", ", x.dst.v, ", (", join(x.dst.ofs, ','))
-    N == 1 && print(io, ',')
-    print(io, ')', ')')
+    if N == 0
+        print(io, '(', x.src, ", ", x.dst.v, ')')
+    else
+        print(io, '(', x.src, ", ", x.dst.v, ", (", join(x.dst.ofs, ','))
+        N == 1 && print(io, ',')
+        print(io, ')', ')')
+    end
 end
 
 const PeriodicEdge1D = PeriodicEdge{1}
@@ -140,7 +153,7 @@ function directedge(src, dst, ofs::SVector{D,T}) where {D,T}
     end
     return PeriodicEdge{D}(dst, src, .-ofs)
 end
-directedge(src, dst, ofs::NTuple{D,T}) where {D,T} = directedge(src, dst, SVector{D,T}(ofs))
+directedge(src, dst, ofs::NTuple{D}) where {D} = directedge(src, dst, SVector{D,Int}(ofs))
 directedge(src::PeriodicVertex, dst::PeriodicVertex) = directedge(src.v, dst.v, dst.ofs .- src.ofs)
 
 function cmp(x::PeriodicEdge{N}, y::PeriodicEdge{N}) where N
