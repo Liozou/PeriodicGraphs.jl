@@ -299,6 +299,10 @@ function Graphs.induced_subgraph(g::PeriodicGraph{N}, vlist::AbstractVector{U}) 
 end
 @noinline __throw_unique_vlist() = throw(ArgumentError("Vertices in subgraph list must be unique"))
 
+function Graphs.induced_subgraph(g::PeriodicGraph{N}, vlist::AbstractVector{Bool}) where N
+    length(vlist) == nv(g) || throw(BoundsError(g, vlist))
+    return induced_subgraph(g, findall(vlist))
+end
 
 """
     OffsetVertexIterator{D}

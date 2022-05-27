@@ -1,12 +1,13 @@
 using Test
-using Graphs
 using PeriodicGraphs
+
+using Aqua
+Aqua.test_all(PeriodicGraphs)
+
+using Graphs
 using PeriodicGraphs: vertex_permutation, LoopException, extended_gcd
 using StaticArrays: SVector, SMatrix
 using Combinatorics
-
-# using Aqua
-# Aqua.test_all(PeriodicGraphs)
 
 function naive_periodicgraph(nv::Integer, t::AbstractVector{PeriodicEdge{N}}) where N
     sort!(t); unique!(t)
@@ -56,6 +57,7 @@ end
     @test PeriodicVertex{4}(5) == PeriodicVertex{4}(5)
     @test PeriodicVertex1D(1, SVector{1,Int}(3)) == PeriodicVertex1D(1, [3])
     @test PeriodicVertex(3, (1,2)) == PeriodicVertex2D(3, (1,2)) == PeriodicVertex(3, SVector{2,Int}(1,2))
+    @test PeriodicVertex{0}(7) == PeriodicVertex{0}(7, ()) == PeriodicVertex(7, ())
     h = hash(PeriodicVertex(3, (1,2)))
     @test h == hash(PeriodicVertex(3, SVector{2,Int}(1,2)))
     @test hash(PeriodicVertex2D(3)) != h != hash(PeriodicVertex3D(3, (1,2,0))) != hash(PeriodicVertex(2, (1,2)))
@@ -70,6 +72,7 @@ end
     @test string(PeriodicVertex3D(12, (1,0,-1))) == "PeriodicVertex3D(12, (1,0,-1))"
     @test string(PeriodicVertex2D[(1, (0,0)), (1, (-1,0))]) == "PeriodicVertex2D[(1, (0,0)), (1, (-1,0))]"
     @test string(PeriodicVertex1D(2, (1,))) == "PeriodicVertex1D(2, (1,))"
+    @test string(PeriodicVertex{0}(12)) == "PeriodicVertex{0}(12)"
     @test last(PeriodicVertex(1, (2,1))) == SVector{2,Int}(2,1)
 end
 
@@ -88,19 +91,23 @@ end
         @test occursin("LoopException", String(take!(io)))
     end
     # There should be no default zero offset to prevent programmers from forgetting the offset
+    # The only exception is for PeriodicVertex and PeriodicEdge with explicit dimension 0
     @test_throws MethodError PeriodicEdge1D(1, 2)
+    @test_throws MethodError PeriodicEdge(3, 6)
     @test PeriodicEdge2D(1, 2, (0,0)) != PeriodicEdge3D(1, 2, (0,0,0))
     @test PeriodicEdge(2, PeriodicVertex2D(1, (1,3))) == PeriodicEdge2D(2, 1, (1,3))
     @test PeriodicEdge(1, 1, SVector{1,Int}(2)) == PeriodicEdge1D(1, 1, SVector{1,Int}(2))
-    @test PeriodicEdge(2, 1, ()) == PeriodicEdge{0}((2, 1, SVector{0,Int}()))
+    @test PeriodicEdge(2, 1, ()) == PeriodicEdge{0}((2, 1, SVector{0,Int}())) == PeriodicEdge{0}(2, 1, ())
     @test PeriodicEdge((1, 2, (1,0,0))) == PeriodicEdge3D((1, 2, (1,0,0)))
     @test hash(PeriodicEdge((1, 2, (1,0,0)))) == hash(PeriodicEdge3D((1, 2, (1,0,0))))
     @test hash(PeriodicEdge((1, 2, (-1,)))) != hash(PeriodicEdge((2, 1, (1,))))
     @test directedge(PeriodicEdge((2, 1, (1,)))) == directedge(PeriodicEdge((1, 2, (-1,)))) == PeriodicEdge((1, 2, (-1,)))
     @test directedge(PeriodicVertex1D(3, (1,)), PeriodicVertex1D(2, (0,))) == PeriodicEdge(2, 3, (1,))
     @test directedge(1, 1, (1, 0)) == directedge(1, 1, (-1, 0)) == PeriodicEdge(1, 1, (1, 0))
+    @test directedge(3, 1, ()) == PeriodicEdge{0}(1, 3, ()) == PeriodicEdge{0}(1, 3)
     @test convert(PeriodicEdge, (3, PeriodicVertex{1}(2, (1,)))) == convert(PeriodicEdge1D, (3, PeriodicVertex{1}(2, (1,))))
     @test PeriodicEdge1D[(1,2,SVector{1,Int}(3))] == PeriodicEdge[(1,2,(3,))] == [PeriodicEdge(1, 2, (3,))]
+    @test PeriodicEdge{0}[(2,3)] == PeriodicEdge{0}[(2, PeriodicVertex{0}(3))] == [PeriodicEdge{0}((2, 3))]
     @test string(PeriodicEdge3D[(1, 2, (1,0,0))]) == "PeriodicEdge3D[(1, 2, (1,0,0))]"
     @test string(PeriodicEdge(3,4, (0,0))) == "PeriodicEdge2D(3, 4, (0,0))"
     @test string(PeriodicEdge{1}(1, 1, (2,))) == "PeriodicEdge1D(1, 1, (2,))"
