@@ -40,7 +40,7 @@ end
 ```
 
 In some cases however, the `Set`-interface can end up being the bottleneck. In this kind of
-situation, it can be better to:
+situation, it *may* be better to:
 
 1. replace the initialization of `visited` by
 
@@ -52,6 +52,8 @@ situation, it can be better to:
 
 2. replace `x ∈ visited` by `visited[hash_position(x, g)]` and
 3. replace `push!(x, visited)` by `visited[hash_position(x, g)] = true`
+
+although some care should be taken since `PeriodicGraphs.graph_width!` is only a heuristic.
 
 Such algorithms can be used to compute the topological invariants like
 [`coordination_sequence`](@ref) for example.

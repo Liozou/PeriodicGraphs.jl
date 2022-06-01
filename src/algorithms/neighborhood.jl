@@ -2,13 +2,31 @@
 
 export coordination_sequence
 
+function _sortunique!(vec)
+    sort!(vec)
+    last_x = 0
+    toremove = Int[]
+    for (i, (x, _)) in enumerate(vec)
+        if x == last_x
+            push!(toremove, i-1)
+        else
+            last_x = x
+        end
+    end
+    deleteat!(vec, toremove)
+    vec
+end
+
 """
     graph_width!(g::PeriodicGraph{N}) where N
 
-Set the `width` internal field of the graph so that the for all `n` ∈ N\\*,
+Set the `width` internal field of the graph so that the for most `n` ∈ N\\*,
 the `n`-th neighbor of any vertex `v` of the initial cell is in a cell
 `(i_1, i_2, ..., i_N)` such that `max(abs.((i_1, i_2, ..., i_N))) ≤ 1 + fld((n - 1), width)`.
 Return the new `width`.
+
+This function is only a heuristic, it may produce a `width` that does not satisfy the
+condition.
 
 This function returns the current `width` if it is not equal to `-1` (internal value used
 to mark an unset `width`). If you decide to modify the other internal fields of `g`, it is
@@ -19,10 +37,10 @@ function graph_width!(g::PeriodicGraph{N}) where N
     previous_width = g.width[]
     previous_width == -1 || return previous_width
     distances = floyd_warshall_shortest_paths(truncated_graph(g)).dists
-    extremalpoints = NTuple{N,NTuple{2,Vector{Tuple{Int,Int}}}}([([],[]) for _ in 1:N])
-    # a, x ∈ extremalpoints[i][j] where i ∈ ⟦1,N⟧ and j ∈ ⟦1,2⟧ means that
+    extremalpoints = SVector{N,NTuple{2,Vector{Tuple{Int,Int}}}}([(Tuple{Int,Int}[], Tuple{Int,Int}[]) for _ in 1:N])
+    # x, a ∈ extremalpoints[i][j] where i ∈ ⟦1,N⟧ and j ∈ ⟦1,2⟧ means that
     # vertex x has a neighbor whose offset is a*(-1)^(j-1) along dimension i
-    maxa = 1
+    maxa = 0
     for e in edges(g)
         _, (_, offset) = e
         iszero(offset) && continue
@@ -30,32 +48,30 @@ function graph_width!(g::PeriodicGraph{N}) where N
             iszero(offset[i]) && continue
             j = signbit(offset[i]) + 1
             a = abs(offset[i])
-            if a > maxa
-                maxa = a
-            end
-            push!(extremalpoints[i][j], (a, e.src))
-            push!(extremalpoints[i][3-j], (a, e.dst.v))
+            maxa = max(maxa, a)
+            push!(extremalpoints[i][j], (e.src, a))
+            push!(extremalpoints[i][3-j], (e.dst.v, a))
         end
+    end
+
+    if maxa == 0# non-periodic graph with no edge crossing cells
+        g.width[] = 1//0
+        return 1//0
     end
 
     width::Rational{Int} = Rational(nv(g)+1)
     for i in 1:N
-        if any(isempty, extremalpoints[i])
-            # TODO check this part
-            if width > 1
-                width = 1//1
-            end
-            continue
-        end
-        for (a1, x1) in extremalpoints[i][1], (a2, x2) in extremalpoints[i][2]
+        extri_pre, extri_post = extremalpoints[i]
+        _sortunique!(extri_pre)
+        _sortunique!(extri_post)
+        isempty(extri_pre) && continue
+        for (x1, a1) in extri_pre, (x2, a2) in extri_post
             dist = distances[x1, x2]
             if dist == typemax(Int)
                 dist = 1
             end
             d = (dist + 1) // (a1 + a2)
-            if d < width
-                width = d
-            end
+            width = min(width, d)
         end
     end
     g.width[] = width == nv(g)+1 ? Rational(maxa) : width
@@ -68,14 +84,21 @@ function Graphs._neighborhood(g::Union{PeriodicGraph{0},PeriodicGraph{1},Periodi
     start_vertex = PeriodicVertex{N}(v)
     push!(Q, (start_vertex, zero(U),) )
     n = nv(g)
-    width = graph_width!(g)
-    seen_size = n*(2*(1 + fld(d-1, width)) + 1)^N
+    if n < 100 # heuristic constant
+        width = graph_width!(g)
+        seen_size = n*(2*(1 + fld(d-1, width)) + 1)^N
+    else
+        seen_size = n
+    end
     seen = falses(seen_size)
-    seen[hash_position(start_vertex, n)] = true
+    seen[v] = true
     #=@inbounds=# for (src, currdist) in Q
         currdist == d && continue # should be in Q but all its neighbours are too far
         for dst in outneighbors(g, src)
             position = hash_position(dst, n)
+            if position > length(seen)
+                append!(seen, falses(position - length(seen)))
+            end
             if !seen[position]
                 seen[position] = true
                 distance = currdist + distmx[src.v, dst.v]
