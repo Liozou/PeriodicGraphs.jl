@@ -2,6 +2,21 @@
 
 export coordination_sequence
 
+function _sortunique!(vec)
+    sort!(vec)
+    last_x = 0
+    toremove = Int[]
+    for (i, (x, _)) in enumerate(vec)
+        if x == last_x
+            push!(toremove, i-1)
+        else
+            last_x = x
+        end
+    end
+    deleteat!(vec, toremove)
+    vec
+end
+
 """
     graph_width!(g::PeriodicGraph{N}) where N
 
@@ -18,6 +33,48 @@ when needed, unless you are sure the width will not be affected by your change.
 function graph_width!(g::PeriodicGraph{N}) where N
     previous_width = g.width[]
     previous_width == -1 || return previous_width
+    # x, a ∈ extremalpoints[i][j] where i ∈ ⟦1,N⟧ and j ∈ ⟦1,2⟧ means that
+    # vertex x has a neighbor whose offset is a*(-1)^(j-1) along dimension i
+    extremalpoints = SVector{N,NTuple{2,Vector{Tuple{Int,Int}}}}([(Tuple{Int,Int}[], Tuple{Int,Int}[]) for _ in 1:N])
+    maxa = 0
+    for e in edges(g)
+        _, (_, offset) = e
+        iszero(offset) && continue
+        for i in 1:N
+            o = offset[i]
+            iszero(o) && continue
+            a = abs(o)
+            j = signbit(o)
+            maxa = max(maxa, a)
+            push!(extremalpoints[i][j+1], (e.src, a))
+            push!(extremalpoints[i][2-j], (e.dst.v, a))
+        end
+    end
+
+    if maxa == 0 # 0-dimensional graph with no edge crossing cells
+        g.width[] = 1//0
+        return 1//0
+    end
+
+    width::Rational{Int} = Rational(nv(g)+1)
+    for i in 1:N
+        extri_pre, extri_post = extremalpoints[i]
+        _sortunique!(extri_pre)
+        _sortunique!(extri_post)
+        isempty(extri_pre) && continue
+        distances = floyd_warshall_shortest_paths(truncated_quotient_graph(g, i)).dists
+        for (x1, a1) in extri_pre, (x2, a2) in extri_post
+            dist = distances[x1, x2]
+            dist == typemax(Int) && continue
+            d = (dist + 1) // (a1 + a2)
+            dist == 1 && @show i, x1, x2
+            width = min(width, d)
+        end
+    end
+    g.width[] = width
+end
+
+function graph_width_old(g::PeriodicGraph{N}) where N
     distances = floyd_warshall_shortest_paths(truncated_graph(g)).dists
     extremalpoints = NTuple{N,NTuple{2,Vector{Tuple{Int,Int}}}}([([],[]) for _ in 1:N])
     # a, x ∈ extremalpoints[i][j] where i ∈ ⟦1,N⟧ and j ∈ ⟦1,2⟧ means that
@@ -58,7 +115,7 @@ function graph_width!(g::PeriodicGraph{N}) where N
             end
         end
     end
-    g.width[] = width == nv(g)+1 ? Rational(maxa) : width
+    width == nv(g)+1 ? Rational(maxa) : width
 end
 
 function Graphs._neighborhood(g::Union{PeriodicGraph{0},PeriodicGraph{1},PeriodicGraph{2},PeriodicGraph{3}}, v::Integer, d::Real, distmx::AbstractMatrix{U}, ::typeof(outneighbors)) where U <: Real
