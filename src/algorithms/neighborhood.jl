@@ -40,7 +40,7 @@ function graph_width!(g::PeriodicGraph{N}) where N
 
     width::Rational{Int} = Rational(nv(g)+1)
     for i in 1:N
-        if any(isempty.(extremalpoints[i]))
+        if any(isempty, extremalpoints[i])
             # TODO check this part
             if width > 1
                 width = 1//1
@@ -74,8 +74,7 @@ function Graphs._neighborhood(g::Union{PeriodicGraph{0},PeriodicGraph{1},Periodi
     seen[hash_position(start_vertex, n)] = true
     #=@inbounds=# for (src, currdist) in Q
         currdist == d && continue # should be in Q but all its neighbours are too far
-        for dst in outneighbors(g, src.v)
-            dst = PeriodicVertex{N}(dst.v, dst.ofs .+ src.ofs)
+        for dst in outneighbors(g, src)
             position = hash_position(dst, n)
             if !seen[position]
                 seen[position] = true
@@ -98,7 +97,7 @@ function Graphs._neighborhood(g::PeriodicGraph{N}, v::Integer, d::Real, distmx::
     push!(seen, start_vertex)
     #=@inbounds=# for (src, currdist) in Q
         currdist == d && continue # should be in Q but all its neighbours are too far
-        @simd for dst in outneighbors(g, src.v)
+        for dst in outneighbors(g, src.v)
             dst = PeriodicVertex(dst.v, dst.ofs .+ src.ofs)
             if dst ∉ seen
                 push!(seen, dst)
