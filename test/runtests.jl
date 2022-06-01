@@ -475,6 +475,14 @@ end
     @test add_edge!(g, 1, PeriodicVertex(1, (0,0,1,0)))
     @test add_edge!(g, 1, PeriodicVertex{4}(1, (0,0,0,1)))
     @test coordination_sequence(g, 1, 30) == [8i*(i^2+2)/3 for i in 1:30] # sequence A008412 of the OEIS
+
+    @static if VERSION < v"1.7.0-"
+        @test PeriodicGraphs.savedhashes3 isa Matrix{Int16}
+    else
+        @test PeriodicGraphs.savedhashes3 isa Array{Int16,3}
+    end
+    sqc7399 = PeriodicGraph3D("3 1 6 0 -1 -1 1 10 -1 -1 0 1 10 -1 0 0 2 5 0 0 0 2 7 -1 0 0 2 7 0 0 0 3 4 0 1 0 3 7 -1 1 0 3 7 0 0 -1 4 10 -1 0 1 4 10 0 -1 0 5 10 -1 0 0 5 10 0 0 0 6 7 0 0 0 6 7 0 1 0 7 7 0 0 1 7 7 0 1 0 7 7 1 -1 -1 7 7 1 0 0 7 8 0 0 0 7 8 0 0 1 7 10 -1 0 1 7 10 0 -1 0 7 10 0 0 0 7 10 0 0 1 8 9 0 -1 -1 9 10 0 0 0 9 10 0 0 1 10 10 0 0 1 10 10 0 1 0 10 10 1 -1 -1 10 10 1 0 0");
+    @test coordination_sequence(sqc7399, 1, 10) == [3, 35, 198, 501, 923, 1465, 2127, 2909, 3811, 4833]
 end
 
 @testset "Graph reduction" begin
