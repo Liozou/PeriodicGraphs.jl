@@ -57,3 +57,6 @@ julia> extract_1D_components(g)
 
 The first subgraph corresponds to `g[[3]]` and the second to `g[[6,7]]`, both converted to
 `PeriodicGraph1D`.
+
+The dimension of a graph can also be reduced with loss of information through the
+[`slice_graph`](@ref) function.

@@ -438,6 +438,8 @@ end
     @test edges(gg) < edges(gcopy) # lexicographical ordering on the list of edges
 end
 
+const sqc7399 = PeriodicGraph3D("3 1 6 0 -1 -1 1 10 -1 -1 0 1 10 -1 0 0 2 5 0 0 0 2 7 -1 0 0 2 7 0 0 0 3 4 0 1 0 3 7 -1 1 0 3 7 0 0 -1 4 10 -1 0 1 4 10 0 -1 0 5 10 -1 0 0 5 10 0 0 0 6 7 0 0 0 6 7 0 1 0 7 7 0 0 1 7 7 0 1 0 7 7 1 -1 -1 7 7 1 0 0 7 8 0 0 0 7 8 0 0 1 7 10 -1 0 1 7 10 0 -1 0 7 10 0 0 0 7 10 0 0 1 8 9 0 -1 -1 9 10 0 0 0 9 10 0 0 1 10 10 0 0 1 10 10 0 1 0 10 10 1 -1 -1 10 10 1 0 0");
+const sqc10673 = PeriodicGraph3D("3 1 3 0 0 0 1 25 -1 -1 -1 1 26 -1 -1 -1 2 5 0 0 0 2 23 -1 0 0 2 24 -1 0 0 3 4 0 0 -1 3 6 0 -1 0 3 7 0 0 0 4 5 0 0 0 4 16 -1 0 0 4 19 0 0 1 5 6 0 0 0 5 8 0 0 0 6 16 0 1 0 6 19 -1 0 0 7 9 0 0 0 7 10 0 0 0 8 11 0 0 0 8 12 0 0 0 9 13 0 0 0 9 17 0 0 0 10 14 0 0 0 10 18 0 0 0 11 13 0 0 0 11 20 0 0 1 12 14 0 0 0 12 15 0 1 0 13 14 0 0 0 13 21 0 0 0 14 22 0 0 0 15 16 0 0 0 15 26 0 -1 0 16 17 0 0 0 17 23 0 0 0 18 19 0 0 0 18 24 0 0 0 19 20 0 0 0 20 25 0 0 -1 21 22 0 0 0 21 23 0 0 0 21 25 0 0 0 22 24 0 0 0 22 26 0 0 0")
 
 @testset "Neighbors" begin
     g = PeriodicGraph3D(1)
@@ -481,16 +483,13 @@ end
     else
         @test PeriodicGraphs.savedhashes3 isa Array{Int16,3}
     end
-    sqc7399 = PeriodicGraph3D("3 1 6 0 -1 -1 1 10 -1 -1 0 1 10 -1 0 0 2 5 0 0 0 2 7 -1 0 0 2 7 0 0 0 3 4 0 1 0 3 7 -1 1 0 3 7 0 0 -1 4 10 -1 0 1 4 10 0 -1 0 5 10 -1 0 0 5 10 0 0 0 6 7 0 0 0 6 7 0 1 0 7 7 0 0 1 7 7 0 1 0 7 7 1 -1 -1 7 7 1 0 0 7 8 0 0 0 7 8 0 0 1 7 10 -1 0 1 7 10 0 -1 0 7 10 0 0 0 7 10 0 0 1 8 9 0 -1 -1 9 10 0 0 0 9 10 0 0 1 10 10 0 0 1 10 10 0 1 0 10 10 1 -1 -1 10 10 1 0 0");
     @test coordination_sequence(sqc7399, 1, 10) == [3, 35, 198, 501, 923, 1465, 2127, 2909, 3811, 4833]
-
-    sqc10673 = PeriodicGraph3D("3 1 3 0 0 0 1 25 -1 -1 -1 1 26 -1 -1 -1 2 5 0 0 0 2 23 -1 0 0 2 24 -1 0 0 3 4 0 0 -1 3 6 0 -1 0 3 7 0 0 0 4 5 0 0 0 4 16 -1 0 0 4 19 0 0 1 5 6 0 0 0 5 8 0 0 0 6 16 0 1 0 6 19 -1 0 0 7 9 0 0 0 7 10 0 0 0 8 11 0 0 0 8 12 0 0 0 9 13 0 0 0 9 17 0 0 0 10 14 0 0 0 10 18 0 0 0 11 13 0 0 0 11 20 0 0 1 12 14 0 0 0 12 15 0 1 0 13 14 0 0 0 13 21 0 0 0 14 22 0 0 0 15 16 0 0 0 15 26 0 -1 0 16 17 0 0 0 17 23 0 0 0 18 19 0 0 0 18 24 0 0 0 19 20 0 0 0 20 25 0 0 -1 21 22 0 0 0 21 23 0 0 0 21 25 0 0 0 22 24 0 0 0 22 26 0 0 0")
     @test coordination_sequence(sqc10673, 3, 10) == [4, 10, 22, 40, 64, 84, 130, 162, 234, 270]
 end
 
 @testset "Graph reduction" begin
     g = PeriodicGraph3D("3  1 2  0 0 0  1 3  0 1 0   2 3  1 0 -1
-                            4 4  0 0 1  4 5  0 -1 0  5 6  0 0 0")
+                            4 4  0 0 1  4 5  0 -1 0  5 6  1 0 0")
     c = truncated_graph(g)
     p = quotient_graph(g)
     @test nv(g) == nv(p) == nv(c)
@@ -499,6 +498,18 @@ end
         @test has_edge(g, src(e), dst(e))
     end
     @test connected_components(p) == connected_components(g)
+
+    @test quotient_graph(slice_graph(sqc10673, SVector{3,Int}(1,2,3))) == truncated_graph(sqc10673)
+    @test quotient_graph(slice_graph(sqc7399, [1,2,3])) == truncated_graph(sqc7399)
+
+    g1 = slice_graph(g, (2,))
+    @test g1 == PeriodicGraph2D("2   1 2  0 0   2 3  1 -1
+                                     4 4  0 1   5 6  1 0")
+    g13 = slice_graph(g, (1,3))
+    @test g13 == PeriodicGraph1D(6, PeriodicEdge1D[(1, 2, (0,)), (1, 3, (1,)), (4, 5, (-1,))])
+
+    g23 = slice_graph(g, [2,3])
+    @test g23 == PeriodicGraph3D("3 1 2  0 0 0   5 6  1 0 0")
 end
 
 @testset "Periodic vertex hash" begin

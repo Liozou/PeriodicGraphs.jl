@@ -1,6 +1,10 @@
 # Other utilities specific to periodic graphs
 
-export offset_representatives!, swap_axes!, truncated_graph, quotient_graph
+export offset_representatives!,
+       swap_axes!,
+       truncated_graph,
+       quotient_graph,
+       slice_graph
 
 """
     offset_representatives!(g::PeriodicGraph, offsets)
@@ -66,7 +70,8 @@ end
 Extract a simple graph from `g` by only keeping the edges that are strictly
 within the initial cell.
 
-See also [`quotient_graph`](@ref) to keep these edges.
+See also [`quotient_graph`](@ref) to keep all of these edges and
+[`slice_graph`](@ref) to keep only some of these edges.
 """
 function truncated_graph(g::PeriodicGraph)
     edgs = [Edge{Int}(x.src, x.dst.v) for x in edges(g) if iszero(x.dst.ofs)]
@@ -85,10 +90,67 @@ the initial cell.
 
 Note that these modified edges may turn into loops.
 
-See also [`truncated_graph`](@ref) to remove these edges.
+See also [`truncated_graph`](@ref) to remove all of these edges and
+[`slice_graph`](@ref) to keep only some of these edges.
 """
 function quotient_graph(g::PeriodicGraph)
     ret = SimpleGraph([Edge{Int}(i, j.v) for i in vertices(g) for j in outneighbors(g, i)])
     add_vertices!(ret, nv(g) - nv(ret))
     return ret
+end
+
+"""
+    slice_graph(g::PeriodicGraph{D}, remove::Union{SVector{N},NTuple{N}}) where {D,N}
+
+Extract a `PeriodicGraph{D-N}` from `g` by removing all edges that have an offset `o` such
+that `!iszero(o[remove])` and shrinking the resulting offsets. In other words, remove the
+dimensions in `remove`.
+
+To only remove the edges while keeping the same number of dimensions, use
+[`slice_graph(g, collect(remove))`](@ref slice_graph(g::PeriodicGraph{D}, remove::Vector{<:Integer}) where D)
+
+`remove` is assumed to be sorted and to contain unique elements.
+
+!!! warning
+    No verification of the previous assumption will be performed.
+"""
+function slice_graph(g::PeriodicGraph{D}, _remove::Union{SVector{N},NTuple{N}}) where {D,N}
+    K = D - N
+    remove = SVector{N,Int}(_remove)
+    _map = Vector{Int}(undef, K)
+    next_remove_j = 1
+    next_remove = isempty(remove) ? 0 : first(remove)
+    counter = 1
+    for i in 1:D
+        if i == next_remove
+            next_remove_j += 1
+            next_remove = next_remove_j > length(remove) ? 0 : remove[next_remove_j]
+        else
+            _map[counter] = i
+            counter += 1
+        end
+    end
+    map = SVector{K,Int}(_map)
+    _edges = PeriodicEdge{K}[PeriodicEdge{K}(s, d, o[map]) for (s, (d, o)) in edges(g) if iszero(o[remove])]
+    return PeriodicGraph{K}(nv(g), _edges)
+end
+
+
+"""
+    slice_graph(g::PeriodicGraph{D}, remove::Vector{<:Integer}) where D
+
+Extract a `PeriodicGraph{D}` from `g` by removing all edges that have an offset `o` such
+that `!iszero(o[remove])`.
+
+Contrarily to the [`slice_graph(g::PeriodicGraph{D}, remove::Union{SVector{N},NTuple{N}}) where {D,N}`](@ref)
+method, the dimensions along which the edges are erased are still kept here.
+
+`remove` is assumed to be sorted and to contain unique elements.
+
+!!! warning
+    No verification of the previous assumption will be performed.
+"""
+function slice_graph(g::PeriodicGraph{D}, remove::Vector{<:Integer}) where D
+    _edges = PeriodicEdge{D}[e for e in edges(g) if iszero(last(last(e))[remove])]
+    return PeriodicGraph{D}(nv(g), _edges)
 end

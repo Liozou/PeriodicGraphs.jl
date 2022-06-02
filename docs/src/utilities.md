@@ -34,7 +34,7 @@ swap_axes!
 offset_representatives!
 ```
 
-## Reduction to aperiodic graph
+## Dimension reduction
 
 Any `PeriodicGraph` can be naturally reduced to an aperiodic graph by removing all offsets
 from the edges and either keeping ([`quotient_graph`](@ref)) or removing
@@ -43,6 +43,13 @@ from the edges and either keeping ([`quotient_graph`](@ref)) or removing
 ```@docs
 quotient_graph
 truncated_graph
+```
+
+It is also possible to reduce the dimension of a graph by removing only some selected
+offsets with the [`slice_graph`](@ref) function.
+
+```@docs
+slice_graph
 ```
 
 ## Arithmetics
