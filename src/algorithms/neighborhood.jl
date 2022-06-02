@@ -82,6 +82,7 @@ function Graphs._neighborhood(g::Union{PeriodicGraph{0},PeriodicGraph{1},Periodi
     Q = Tuple{PeriodicVertex{N}, U}[]
     d < zero(U) && return Q
     start_vertex = PeriodicVertex{N}(v)
+    sizehint!(Q, floor(Int, 6N*(d*ne(g)/(N^2*(1+nv(g))))^N)) # heuristically determined
     push!(Q, (start_vertex, zero(U),) )
     n = nv(g)
     if n < 100 # heuristic constant
@@ -92,7 +93,7 @@ function Graphs._neighborhood(g::Union{PeriodicGraph{0},PeriodicGraph{1},Periodi
     end
     seen = falses(seen_size)
     seen[v] = true
-    #=@inbounds=# for (src, currdist) in Q
+    @inbounds for (src, currdist) in Q
         currdist == d && continue # should be in Q but all its neighbours are too far
         for dst in outneighbors(g, src)
             position = hash_position(dst, n)
@@ -115,10 +116,13 @@ function Graphs._neighborhood(g::PeriodicGraph{N}, v::Integer, d::Real, distmx::
     Q = Tuple{PeriodicVertex, U}[]
     d < zero(U) && return Q
     start_vertex = PeriodicVertex{N}(v)
+    hintsize = floor(Int, 6N*(d*ne(g)/(N^2*(1+nv(g))))^N)  # heuristically determined
+    sizehint!(Q, hintsize)
     push!(Q, (start_vertex, zero(U),) )
     seen = Set{PeriodicVertex{N}}()
+    sizehint!(seen, hintsize)
     push!(seen, start_vertex)
-    #=@inbounds=# for (src, currdist) in Q
+    @inbounds for (src, currdist) in Q
         currdist == d && continue # should be in Q but all its neighbours are too far
         for dst in outneighbors(g, src.v)
             dst = PeriodicVertex(dst.v, dst.ofs .+ src.ofs)
