@@ -315,13 +315,17 @@ struct OffsetVertexIterator{D}
     ofs::SVector{D,Int}
     nlist::Vector{PeriodicVertex{D}}
 end
-function iterate(x::OffsetVertexIterator{D}, state=1) where D
-    state > length(x.nlist) && return nothing
-    neigh = @inbounds x.nlist[state]
-    return (PeriodicVertex{D}(neigh.v, neigh.ofs .+ x.ofs), state+1)
+function Base.getindex(x::OffsetVertexIterator{D}, state=1) where D
+    neigh = x.nlist[state]
+    return PeriodicVertex{D}(neigh.v, neigh.ofs .+ x.ofs)
 end
-length(x::OffsetVertexIterator{D}) where {D} = length(x.nlist)
-eltype(::Type{OffsetVertexIterator{D}}) where {D} = PeriodicVertex{D}
+Base.length(x::OffsetVertexIterator) = length(x.nlist)
+Base.eltype(::Type{OffsetVertexIterator{D}}) where {D} = PeriodicVertex{D}
+Base.keys(x::OffsetVertexIterator) = Base.OneTo(length(x))
+
+function Base.iterate(x::OffsetVertexIterator, state=1)
+    (state % UInt) - 1 < length(x) ? ((@inbounds x[state]), state+1) : nothing
+end
 
 for (neigh, deg) in ((:neighbors, :degree),
                      (:inneighbors, :indegree),

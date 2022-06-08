@@ -1365,14 +1365,15 @@ struct RingAttributions{D}
     rings::Vector{Vector{PeriodicVertex{D}}}
     attrs::Vector{Vector{Tuple{Int,Int}}}
 
-    function RingAttributions{D}(n, rs::Vector{Vector{Int}}) where D
-        rings = [Vector{PeriodicVertex{D}}(undef, length(r)) for r in rs]
+    function RingAttributions{D}(n, rs::Vector{Vector{T}}) where {D,T<:Union{Integer,PeriodicVertex{D}}}
+        keeprs = T == PeriodicVertex{D}
+        rings = keeprs ? rs : [Vector{PeriodicVertex{D}}(undef, length(r)) for r in rs]
         attrs = [Tuple{Int,Int}[] for _ in 1:n]
         for (i, r) in enumerate(rs)
             ring = rings[i]
             for (j, x) in enumerate(r)
-                u = reverse_hash_position(x, n, Val(D))
-                ring[j] = u
+                u = T == PeriodicVertex{D} ? x : reverse_hash_position(x, n, Val(D))
+                keeprs || (ring[j] = u)
                 push!(attrs[u.v], (i, j))
             end
         end
@@ -1435,6 +1436,7 @@ end
 Base.length(ri::RingIncluding) = length(ri.ras.attrs[ri.i])
 Base.eltype(::Type{RingIncluding{D}}) where {D} = OffsetVertexIterator{D}
 
+Base.keys(rs::Union{RingAttributions,RingIncluding}) = Base.OneTo(length(rs))
 function Base.iterate(r::Union{RingAttributions,RingIncluding}, state=1)
     (state % UInt) - 1 < length(r) ? ((@inbounds r[state]), state+1) : nothing
 end
