@@ -1,6 +1,6 @@
 # Ring statistics
 
-export rings, strong_rings, RingAttributions, normalize_cycle!
+export rings, strong_rings, RingAttributions, RingIncluding, normalize_cycle!
 
 """
     ConstMiniBitSet{T} <: AbstractSet{Int}
@@ -1372,6 +1372,12 @@ function strong_rings(g::PeriodicGraph, symmetries::AbstractSymmetryGroup, dist:
 end
 
 
+# trick for mutually-dependent types, see definition after that of RingAttributions
+struct _RingIncluding{D,T} <: AbstractVector{OffsetVertexIterator{D}}
+    ras::T
+    i::Int
+end
+
 """
     RingAttributions{D} <: AbstractVector{RingIncluding{D}}
 
@@ -1380,7 +1386,7 @@ Represent a set of rings of a `PeriodicGraph{D}`.
 For `ra` of type `RingAttributions{D}`, `ra[i]` is a [`RingIncluding{D}`](@ref) object
 representing the set of rings including `PeriodicVertex{D}(i)`.
 """
-struct RingAttributions{D} <: AbstractVector{RingIncluding{D}}
+struct RingAttributions{D} <: AbstractVector{_RingIncluding{D,RingAttributions{D}}}
     rings::Vector{Vector{PeriodicVertex{D}}}
     attrs::Vector{Vector{Tuple{Int,Int}}}
 
@@ -1432,7 +1438,7 @@ Base.firstindex(::RingAttributions) = 1
 Base.lastindex(ras::RingAttributions) = length(ras)
 Base.IndexStyle(::Type{RingAttributions{D}}) where {D} = Base.IndexLinear()
 
-function Base.show(io::IO, ras::RingAttributions)
+function Base.show(io::IO, ::MIME"text/plain", ras::RingAttributions)
     println(io, typeof(ras), "(rings per node: ", length.(ras.attrs), ')')
 end
 
@@ -1445,10 +1451,9 @@ The list of rings of a `PeriodicGraph{D}` including a particular vertex
 The object is iterable and indexable by an integer: for `ri` of type `RingIncluding{D}`,
 `ri[j]` is an iterable over the vertices of the `j`-th ring including vertex `i`.
 """
-struct RingIncluding{D} <: AbstractVector{OffsetVertexIterator{D}}
-    ras::RingAttributions{D}
-    i::Int
-end
+const RingIncluding{D} = _RingIncluding{D,RingAttributions{D}}
+RingIncluding(ras::RingAttributions{D}, i) where {D} = RingIncluding{D}(ras, i)
+
 function Base.getindex(ri::RingIncluding{D}, j::Integer) where {D}
     newring_idx, idx = ri.ras.attrs[ri.i][j]
     newring = ri.ras.rings[newring_idx]
@@ -1461,7 +1466,3 @@ Base.keys(ri::RingIncluding) = Base.OneTo(length(ri))
 Base.firstindex(::RingIncluding) = 1
 Base.lastindex(ri::RingIncluding) = length(ri)
 Base.IndexStyle(::Type{RingIncluding{D}}) where {D} = Base.IndexLinear()
-
-function Base.show(io::IO, ri::RingIncluding{D}) where D
-    print(io, RingIncluding{D}, '(', length(ri), " rings containing vertex ", ri.i, ')')
-end

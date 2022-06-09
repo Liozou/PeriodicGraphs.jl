@@ -106,11 +106,11 @@ each vertex of the cube except for one of the four opposite pairs.
 
 To explore the ring distributions around individual vertices, the [`RingAttributions`](@ref)
 struct factors the ring distribution by vertex. The list of rings including a particular
-vertex is factored into a [`PeriodicGraphs.RingIncluding`](@ref) struct:
+vertex is factored into a [`RingIncluding`](@ref) struct:
 
 ```@docs
 RingAttributions
-PeriodicGraphs.RingIncluding
+RingIncluding
 ```
 
 To avoid useless computations, the lists of rings and the rings themselves are returned as
@@ -123,18 +123,15 @@ Let's look all the rings on our little house:
 julia> ras = RingAttributions(house)
 RingAttributions{0}(rings per node: [6, 6, 6, 6, 8, 8, 8, 8, 4])
 
-julia> roofpeak = ras[9] # 9 is the top of the roof
-PeriodicGraphs.RingIncluding{0}(4 rings containing vertex 9)
+julia> roofpeak = ras[9] # the list of rings including the top of the roof
+4-element RingIncluding{0}:
+ [5, 8, 9]
+ [5, 6, 9]
+ [7, 8, 9]
+ [6, 7, 9]
 
-julia> collect(roofpeak) # the list of rings including the top of the roof
-4-element Vector{PeriodicGraphs.OffsetVertexIterator{0}}:
- PeriodicVertex{0}[5, 8, 9]
- PeriodicVertex{0}[5, 6, 9]
- PeriodicVertex{0}[7, 8, 9]
- PeriodicVertex{0}[6, 7, 9]
-
-julia> collect(roofpeak[2]) # the second ring including the top of the roof
-3-element Vector{PeriodicVertex{0}}:
+julia> roofpeak[2] # the second ring including the top of the roof
+3-element PeriodicGraphs.OffsetVertexIterator{0}:
  5
  6
  9
@@ -142,18 +139,18 @@ julia> collect(roofpeak[2]) # the second ring including the top of the roof
 julia> rasstrong = RingAttributions(house, true)
 RingAttributions{0}(rings per node: [3, 3, 3, 3, 4, 4, 4, 4, 4])
 
-julia> collect(rasstrong[1]) # the base and two walls make the strong rings around vertex 1
-3-element Vector{PeriodicGraphs.OffsetVertexIterator{0}}:
- PeriodicVertex{0}[1, 2, 6, 5]
- PeriodicVertex{0}[1, 4, 8, 5]
- PeriodicVertex{0}[1, 2, 3, 4]
+julia> rasstrong[1] # the base and two walls make the strong rings around vertex 1
+3-element RingIncluding{0}:
+ [1, 2, 6, 5]
+ [1, 4, 8, 5]
+ [1, 2, 3, 4]
 
 julia> collect(rasstrong[5]) # two rooftiles and two walls make the strong rings around vertex 5
 4-element Vector{PeriodicGraphs.OffsetVertexIterator{0}}:
- PeriodicVertex{0}[5, 8, 9]
- PeriodicVertex{0}[5, 6, 9]
- PeriodicVertex{0}[1, 2, 6, 5]
- PeriodicVertex{0}[1, 4, 8, 5]
+ [5, 8, 9]
+ [5, 6, 9]
+ [1, 2, 6, 5]
+ [1, 4, 8, 5]
 ```
 
 ## Internal API

@@ -2,7 +2,7 @@ using Test
 using PeriodicGraphs
 
 using Aqua
-Aqua.test_all(PeriodicGraphs)
+Aqua.test_all(PeriodicGraphs; ambiguities=(; exclude=[sort!])) # TODO: fix upsrteam at Graphs.jl
 
 using Graphs
 using PeriodicGraphs: vertex_permutation, LoopException, extended_gcd
@@ -852,9 +852,8 @@ end
     @test sort!(length.(rings_mtn[10])) == [fill(5,6); fill(10, 9)]
     @test sort!(length.(rings_mtn[13])) == [fill(5,6); fill(10, 12)]
     @test eltype(rings_mtn) == PeriodicGraphs.RingIncluding{3}
-    str_rings_mtn = string(rings_mtn)
+    str_rings_mtn = sprint(io -> show(io, MIME("text/plain"), rings_mtn))
     @test occursin("rings per node: [12", str_rings_mtn)
-    @test occursin("15 rings containing vertex 7", string(rings_mtn[7]))
     @test eltype(rings_mtn[1]) == PeriodicGraphs.OffsetVertexIterator{3}
     @test isempty(rings(mtn, 0)[1])
     @test isempty(strong_rings(mtn, 0)[1])
