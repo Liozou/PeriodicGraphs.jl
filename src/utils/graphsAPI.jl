@@ -305,27 +305,30 @@ function Graphs.induced_subgraph(g::PeriodicGraph{N}, vlist::AbstractVector{Bool
 end
 
 """
-    OffsetVertexIterator{D}
+    OffsetVertexIterator{D} <: AbstractVector{PeriodicVertex{D}}
     OffsetVertexIterator(ofs::SVector{D,Int}, list::AbstractVector{PeriodicVertex{D}}) where D
 
 Iterator type that yields the sequence of `PeriodicVertex` in `list`, each offset by the
 input `ofs`.
 """
-struct OffsetVertexIterator{D}
+struct OffsetVertexIterator{D} <: AbstractVector{PeriodicVertex{D}}
     ofs::SVector{D,Int}
     nlist::Vector{PeriodicVertex{D}}
 end
-function Base.getindex(x::OffsetVertexIterator{D}, state=1) where D
-    neigh = x.nlist[state]
+
+function Base.getindex(x::OffsetVertexIterator{D}, i::Int) where D
+    neigh = x.nlist[i]
     return PeriodicVertex{D}(neigh.v, neigh.ofs .+ x.ofs)
 end
-Base.length(x::OffsetVertexIterator) = length(x.nlist)
-Base.eltype(::Type{OffsetVertexIterator{D}}) where {D} = PeriodicVertex{D}
+Base.size(x::OffsetVertexIterator) = (length(x.nlist),)
 Base.keys(x::OffsetVertexIterator) = Base.OneTo(length(x))
+Base.firstindex(::OffsetVertexIterator) = 1
+Base.lastindex(x::OffsetVertexIterator) = length(x)
+Base.IndexStyle(::Type{OffsetVertexIterator{D}}) where {D} = Base.IndexLinear()
 
-function Base.iterate(x::OffsetVertexIterator, state=1)
-    (state % UInt) - 1 < length(x) ? ((@inbounds x[state]), state+1) : nothing
-end
+# function Base.iterate(x::OffsetVertexIterator, state=1)
+#     (state % UInt) - 1 < length(x) ? ((@inbounds x[state]), state+1) : nothing
+# end
 
 for (neigh, deg) in ((:neighbors, :degree),
                      (:inneighbors, :indegree),
@@ -338,12 +341,6 @@ for (neigh, deg) in ((:neighbors, :degree),
             length(($neigh)(g, u))
         end
     end
-end
-
-function show(io::IO, l::OffsetVertexIterator{D}) where D
-    print(io, PeriodicVertex{D}, '[')
-    join(IOContext(io, :typeinfo => PeriodicVertex{D}), l, ", ")
-    print(io, ']')
 end
 
 function reverse_hash_position(hash::Integer, g::PeriodicGraph{D}) where D

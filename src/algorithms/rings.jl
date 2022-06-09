@@ -1373,14 +1373,14 @@ end
 
 
 """
-    RingAttributions{D}
+    RingAttributions{D} <: AbstractVector{RingIncluding{D}}
 
 Represent a set of rings of a `PeriodicGraph{D}`.
 
 For `ra` of type `RingAttributions{D}`, `ra[i]` is a [`RingIncluding{D}`](@ref) object
 representing the set of rings including `PeriodicVertex{D}(i)`.
 """
-struct RingAttributions{D}
+struct RingAttributions{D} <: AbstractVector{RingIncluding{D}}
     rings::Vector{Vector{PeriodicVertex{D}}}
     attrs::Vector{Vector{Tuple{Int,Int}}}
 
@@ -1426,15 +1426,18 @@ Base.@propagate_inbounds function Base.getindex(ras::RingAttributions, i::Intege
     @boundscheck checkbounds(ras.attrs, i)
     RingIncluding(ras, i)
 end
-Base.length(ras::RingAttributions) = length(ras.attrs)
-Base.eltype(::Type{RingAttributions{D}}) where {D} = RingIncluding{D}
+Base.size(ras::RingAttributions) = size(ras.attrs)
+Base.keys(ras::RingAttributions) = Base.OneTo(length(ras))
+Base.firstindex(::RingAttributions) = 1
+Base.lastindex(ras::RingAttributions) = length(ras)
+Base.IndexStyle(::Type{RingAttributions{D}}) where {D} = Base.IndexLinear()
 
 function Base.show(io::IO, ras::RingAttributions)
     println(io, typeof(ras), "(rings per node: ", length.(ras.attrs), ')')
 end
 
 """
-    RingIncluding{D}
+    RingIncluding{D} <: AbstractVector{OffsetVertexIterator{D}}
 
 The list of rings of a `PeriodicGraph{D}` including a particular vertex
 `PeriodicVertex{D}(i)`.
@@ -1442,7 +1445,7 @@ The list of rings of a `PeriodicGraph{D}` including a particular vertex
 The object is iterable and indexable by an integer: for `ri` of type `RingIncluding{D}`,
 `ri[j]` is an iterable over the vertices of the `j`-th ring including vertex `i`.
 """
-struct RingIncluding{D}
+struct RingIncluding{D} <: AbstractVector{OffsetVertexIterator{D}}
     ras::RingAttributions{D}
     i::Int
 end
@@ -1452,13 +1455,12 @@ function Base.getindex(ri::RingIncluding{D}, j::Integer) where {D}
     ofs = newring[idx].ofs
     return OffsetVertexIterator{D}(.-ofs, newring)
 end
-Base.length(ri::RingIncluding) = length(ri.ras.attrs[ri.i])
-Base.eltype(::Type{RingIncluding{D}}) where {D} = OffsetVertexIterator{D}
+Base.size(ri::RingIncluding) = size(ri.ras.attrs[ri.i])
 
-Base.keys(rs::Union{RingAttributions,RingIncluding}) = Base.OneTo(length(rs))
-function Base.iterate(r::Union{RingAttributions,RingIncluding}, state=1)
-    (state % UInt) - 1 < length(r) ? ((@inbounds r[state]), state+1) : nothing
-end
+Base.keys(ri::RingIncluding) = Base.OneTo(length(ri))
+Base.firstindex(::RingIncluding) = 1
+Base.lastindex(ri::RingIncluding) = length(ri)
+Base.IndexStyle(::Type{RingIncluding{D}}) where {D} = Base.IndexLinear()
 
 function Base.show(io::IO, ri::RingIncluding{D}) where D
     print(io, RingIncluding{D}, '(', length(ri), " rings containing vertex ", ri.i, ')')
