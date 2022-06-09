@@ -1,6 +1,6 @@
 # Ring statistics
 
-export rings, strong_rings, RingAttributions
+export rings, strong_rings, RingAttributions, normalize_cycle!
 
 """
     ConstMiniBitSet{T} <: AbstractSet{Int}
@@ -926,18 +926,31 @@ end
 cages_around(::PeriodicGraph{0}, _) = [SVector{0,Int}()]
 
 const VertexPair{D} = Tuple{PeriodicVertex{D},PeriodicVertex{D}}
+
+"""
+    EdgeDict{D}
+
+Internal map from pairs of `PeriodicVertex{D}` to the identifier of the corresponding edge.
+
+`kp::EdgeDict{D}` should be queried by either `get!(kp, minmax(v1, v2))` where `v1` and
+`v2` are `PeriodicVertex{D}` to obtain the identifier of the edge and store a new
+identifier if absent, or by `kp[i]` where `i` is an `Integer` to obtain the pair of
+vertices corresponding to identifier `i`.
+
+`kp` is built by calling `EdgeDict(g)` where `g` is a `PeriodicGraph`.
+"""
 struct EdgeDict{D}
     direct::Vector{VertexPair{D}}
     reverse::Dict{VertexPair{D},Int}
-end
 
-function EdgeDict(g::PeriodicGraph{D}) where D
-    known_pairs = VertexPair{D}[]
-    known_pairs_dict = Dict{VertexPair{D},Int}()
-    hintsize = 3^D*ne(g)^2
-    sizehint!(known_pairs, hintsize)
-    sizehint!(known_pairs_dict, hintsize)
-    return EdgeDict{D}(known_pairs, known_pairs_dict)
+    function EdgeDict(g::PeriodicGraph{D}) where D
+        known_pairs = VertexPair{D}[]
+        known_pairs_dict = Dict{VertexPair{D},Int}()
+        hintsize = 3^D*ne(g)^2
+        sizehint!(known_pairs, hintsize)
+        sizehint!(known_pairs_dict, hintsize)
+        return new{D}(known_pairs, known_pairs_dict)
+    end
 end
 
 function Base.get!(kp::EdgeDict{D}, x::VertexPair{D}) where D
@@ -977,6 +990,12 @@ function unique_order(cycles)
 end
 
 
+"""
+    convert_to_ering!(buffer, ring::Vector{PeriodicVertex{D}}, len, kp::EdgeDict{D}, ofs) where D
+
+Return the edge ring corresponding to `OffsetVertexIterator{D}(ring[1:len], ofs)` inside
+`buffer[1:len]`.
+"""
 function convert_to_ering!(buffer, ring::Vector{PeriodicVertex{D}}, len, kp::EdgeDict{D}, ofs) where D
     _last_p = ring[len]
     last_p = PeriodicVertex{D}(_last_p.v, _last_p.ofs .+ ofs)
