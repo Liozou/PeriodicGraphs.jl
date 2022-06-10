@@ -1356,12 +1356,12 @@ function strong_erings(rs::Vector{Vector{Int}}, g::PeriodicGraph{D}, depth=15, r
     return origin, NoSymmetryGroup(length(ret)), ecycles, kp
 end
 
-function strong_erings(g::PeriodicGraph, depth=15, symmetries::AbstractSymmetryGroup=NoSymmetryGroup(g), dist::DistanceRecord=DistanceRecord(g,depth))
+function strong_erings(g::PeriodicGraph, depth::Integer=15, symmetries::AbstractSymmetryGroup=NoSymmetryGroup(g), dist::DistanceRecord=DistanceRecord(g,depth))
     rs, symmg = rings(g, depth, symmetries, dist)
     keep, symms, erings, kp = strong_erings(rs, g, depth, symmg)
     return rs[keep], symms, erings, kp
 end
-function strong_erings(g::PeriodicGraph, symmetries::AbstractSymmetryGroup=NoSymmetryGroup(g), dist::DistanceRecord=DistanceRecord(g,15))
+function strong_erings(g::PeriodicGraph, symmetries::AbstractSymmetryGroup, dist::DistanceRecord=DistanceRecord(g,15))
     strong_erings(g, 15, symmetries, dist)
 end
 

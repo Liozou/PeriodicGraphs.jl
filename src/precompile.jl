@@ -178,6 +178,11 @@ function _precompile_()
         @enforce Base.precompile(Tuple{typeof(swap_axes!),PeriodicGraph{i},NTuple{i,Int}})
         @enforce Base.precompile(Tuple{typeof(truncated_graph),PeriodicGraph{i}})
         @enforce Base.precompile(Tuple{typeof(quotient_graph),PeriodicGraph{i}})
+        for N in 1:i
+            @enforce Base.precompile(Tuple{typeof(slice_graph), PeriodicGraph{i}, SVector{N,Int}})
+            @enforce Base.precompile(Tuple{typeof(slice_graph), PeriodicGraph{i}, NTuple{N,Int}})
+        end
+        @enforce Base.precompile(Tuple{typeof(slice_graph), PeriodicGraph{i}, Vector{Int}})
 
         # Ring statistics
         dag{T} = Vector{PeriodicGraphs.JunctionNode{T}}
@@ -222,6 +227,13 @@ function _precompile_()
         @enforce Base.precompile(Tuple{typeof(PeriodicGraphs.sort_cycles), PeriodicGraph{i}, Vector{Vector{Int}}, Int, Tuple{Vector{Tuple{PeriodicVertex{i},PeriodicVertex{i}}}, Dict{Tuple{PeriodicVertex{i},PeriodicVertex{i}},Int}}})
         @enforce Base.precompile(Tuple{typeof(PeriodicGraphs.sort_cycles), PeriodicGraph{i}, Vector{Vector{Int}}, Int})
         @enforce Base.precompile(Tuple{typeof(PeriodicGraphs.sort_cycles), PeriodicGraph{i}, Vector{Vector{Int}}})
+        @enforce Base.precompile(Tuple{typeof(strong_erings), Vector{Vector{Int}}, PeriodicGraph{i}, Int, nosymm})
+        @enforce Base.precompile(Tuple{typeof(strong_erings), Vector{Vector{Int}}, PeriodicGraph{i}, Int})
+        @enforce Base.precompile(Tuple{typeof(strong_erings), Vector{Vector{Int}}, PeriodicGraph{i}})
+        @enforce Base.precompile(Tuple{typeof(strong_erings), PeriodicGraph{i}, Int, nosymm, dist})
+        @enforce Base.precompile(Tuple{typeof(strong_erings), PeriodicGraph{i}, Int, nosymm})
+        @enforce Base.precompile(Tuple{typeof(strong_erings), PeriodicGraph{i}, Int})
+        @enforce Base.precompile(Tuple{typeof(strong_erings), PeriodicGraph{i}})
         @enforce Base.precompile(Tuple{typeof(strong_rings), Vector{Vector{Int}}, PeriodicGraph{i}, Int, nosymm})
         @enforce Base.precompile(Tuple{typeof(strong_rings), Vector{Vector{Int}}, PeriodicGraph{i}, Int})
         @enforce Base.precompile(Tuple{typeof(strong_rings), Vector{Vector{Int}}, PeriodicGraph{i}})
