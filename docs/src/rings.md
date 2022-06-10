@@ -171,5 +171,6 @@ PeriodicGraphs.gaussian_elimination!
 PeriodicGraphs.retrieve_track!
 PeriodicGraphs.rings_around
 PeriodicGraphs.EdgeDict
+strong_erings
 PeriodicGraphs.convert_to_ering!
 ```

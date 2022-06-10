@@ -417,6 +417,7 @@ end
     gg = g[[3,1]]
     @test nv(gg) == 2
     @test collect(edges(gg)) == PeriodicEdge3D[(1, 2, (0,0,-1)), (2, 2, (1,0,0))]
+    @test gg == g[[true, false, true, false]][[2,1]]
     @test_throws ArgumentError g[[3,3]]
     @test_throws ArgumentError offset_representatives!(gg, [2])
     gcopy = PeriodicGraph(g)
@@ -612,11 +613,14 @@ end
 
     expected_neighbors = PeriodicVertex3D[(1, (7, -9, 1)), (2, (7, -10, 2)),
                                           (2, (7, -9, 2)), (2, (8, -9, 2))]
-    @test collect(neighbors(g, PeriodicVertex(3, (7, -9, 2)))) == expected_neighbors
+    ofslist = neighbors(g, PeriodicVertex(3, (7, -9, 2)))
+    @test ofslist == collect(ofslist) == ofslist[begin:end] == expected_neighbors
+    @test keys(ofslist) == 1:4
+    @test neighbors(g, PeriodicVertex3D(2)) == neighbors(g, 2)
     @test isempty(outneighbors(g, PeriodicVertex(5, (1, 0, 1))))
     @test only(inneighbors(g, PeriodicVertex(1, (4, 5, 6)))) == PeriodicVertex(3, (4, 5, 7))
     @test indegree(g, 2) == indegree(g, PeriodicVertex3D(2)) == outdegree(g, PeriodicVertex3D(2)) == degree(g, PeriodicVertex3D(2))
-    @test string(neighbors(g, PeriodicVertex(3, (7, -9, 2)))) == string(expected_neighbors)
+    @test string(ofslist) == string(expected_neighbors)
 end
 
 @testset "Vertex removal" begin
@@ -907,6 +911,8 @@ end
     @test gausstrack.shortcuts == Int32[4, 7, 1, 2, 6, 3, 8]
     @test length(gausstrack.rings) == 9
 
+    @test PeriodicGraphs.IterativeGaussianElimination().track == PeriodicGraphs.IterativeGaussianElimination{Nothing}().track == nothing
+
     # keep track of the limitations
     @test_throws ErrorException rings(lta, 63)
     very_high_degree = PeriodicGraph{0}(128)
@@ -1014,6 +1020,14 @@ end
         @test canonicalize_ri(r1) == canonicalize_ri(r2)
     end
 
+    # AbstractArray interface
+    _ri = first(ras_sny2)
+    @test _ri == ras_sny2[1] == ras_sny2[begin]
+    @test last(ras_sny2) == ras_sny2[length(ras_sny2)] == ras_sny2[end]
+
+    @test _ri[1] == first(_ri) == _ri[begin]
+    @test _ri[length(_ri)] == last(_ri) == _ri[end]
+
     ras_sny6 = RingAttributions(sny, true, 6)
     rasym_sny6 = RingAttributions(sny, symmetries_sny)
     @test length(ras_sny6) == length(rasym_sny6)
@@ -1067,6 +1081,7 @@ end
             @test symmweaks(image) == id
         end
     end
+
     strs, symmstrs = strong_rings(lta, symmetries_lta)
     @test length(symmstrs) == length(symmetries_lta)
     for str in strs
@@ -1079,6 +1094,20 @@ end
             @test image ∈ strs
             @test symmstrs(image) == id
         end
+    end
+
+    _strs, _symmstrs, estrs, kp = strong_erings(lta, symmetries_lta)
+    @test _strs == strs
+    @test unique(symmstrs) == unique(_symmstrs)
+    @test length.(estrs) == length.(strs)
+    for (str, estr) in Iterators.take(zip(strs, estrs), 5)
+        @test issorted(estr)
+        for e in estr
+            @test get!(kp, kp[e]) == e
+        end
+        lenstr = length(str)
+        _edgestr = [minmax(str[i], str[mod1(i+1,lenstr)]) for i in 1:lenstr]
+        @test issetequal(_edgestr, minmax(hash_position.(kp[e], nv(lta))...) for e in estr)
     end
 end
 

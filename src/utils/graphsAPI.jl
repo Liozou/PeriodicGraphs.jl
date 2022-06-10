@@ -321,14 +321,7 @@ function Base.getindex(x::OffsetVertexIterator{D}, i::Int) where D
     return PeriodicVertex{D}(neigh.v, neigh.ofs .+ x.ofs)
 end
 Base.size(x::OffsetVertexIterator) = (length(x.nlist),)
-Base.keys(x::OffsetVertexIterator) = Base.OneTo(length(x))
-Base.firstindex(::OffsetVertexIterator) = 1
-Base.lastindex(x::OffsetVertexIterator) = length(x)
 Base.IndexStyle(::Type{OffsetVertexIterator{D}}) where {D} = Base.IndexLinear()
-
-# function Base.iterate(x::OffsetVertexIterator, state=1)
-#     (state % UInt) - 1 < length(x) ? ((@inbounds x[state]), state+1) : nothing
-# end
 
 for (neigh, deg) in ((:neighbors, :degree),
                      (:inneighbors, :indegree),

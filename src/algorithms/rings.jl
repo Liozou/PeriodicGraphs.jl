@@ -1,6 +1,7 @@
 # Ring statistics
 
-export rings, strong_rings, RingAttributions, RingIncluding, normalize_cycle!
+export rings, strong_rings, strong_erings, RingAttributions, RingIncluding,
+       normalize_cycle!
 
 """
     ConstMiniBitSet{T} <: AbstractSet{Int}
@@ -42,8 +43,6 @@ function Base.iterate(::ConstMiniBitSet{T}, x::T) where T
     return (first, x & (~(one(T) << (first % UInt8))))
 end
 Base.iterate(x::ConstMiniBitSet) = iterate(x, x.x)
-Base.isdone(::ConstMiniBitSet{T}, x::T) where {T} = iszero(x)
-Base.isdone(x::ConstMiniBitSet) = Base.isdone(x, x.x)
 
 hasonly(x::ConstMiniBitSet{T}, i::Integer) where {T} = iszero(x.x & ~(one(T) << (i % UInt8)))
 
@@ -930,7 +929,7 @@ const VertexPair{D} = Tuple{PeriodicVertex{D},PeriodicVertex{D}}
 """
     EdgeDict{D}
 
-Internal map from pairs of `PeriodicVertex{D}` to the identifier of the corresponding edge.
+Map from pairs of `PeriodicVertex{D}` to the identifier of the corresponding edge.
 
 `kp::EdgeDict{D}` should be queried by either `get!(kp, minmax(v1, v2))` where `v1` and
 `v2` are `PeriodicVertex{D}` to obtain the identifier of the edge and store a new
@@ -1282,6 +1281,22 @@ retrieve_track!(gauss::IterativeGaussianEliminationDecomposition) = retrieve_tra
 #     return ret
 # end
 
+"""
+    strong_erings([rs::Vector{Vector{Int}},], g::PeriodicGraph{D}, [depth=15,] ringsymms::AbstractSymmetryGroup=NoSymmetryGroup(length(rs))) where D
+
+Compute the list of strong edge rings in `g`, up to length `2*depth+3`.
+See [`strong_rings`](@ref) and [`rings`](@ref) for the meaning of the optional arguments.
+
+Return a quadruplet of values:
+- the two first values are the list of rings and their symmetry group, identical to the
+  result of [`strong_rings`](@ref), unless `rs` is provided (see below).
+- the third is the list of edge rings: each edge of the periodic graph is mapped to an
+  integer and each ring is represented by the sorted list of its edges.
+- the last is the mapping from edges to integers, given as an [`EdgeDict`](@ref).
+
+If `rs` is provided, the first returned value is the list of indices `keep` of `rs` such
+that `rs[keep]` is the list of strong rings.
+"""
 function strong_erings(rs::Vector{Vector{Int}}, g::PeriodicGraph{D}, depth=15, ringsymms::AbstractSymmetryGroup=NoSymmetryGroup(length(rs))) where D
     kp = EdgeDict(g)
     ecycles, origin = sort_cycles(g, rs, depth, kp)
@@ -1346,7 +1361,9 @@ function strong_erings(g::PeriodicGraph, depth=15, symmetries::AbstractSymmetryG
     keep, symms, erings, kp = strong_erings(rs, g, depth, symmg)
     return rs[keep], symms, erings, kp
 end
-
+function strong_erings(g::PeriodicGraph, symmetries::AbstractSymmetryGroup=NoSymmetryGroup(g), dist::DistanceRecord=DistanceRecord(g,15))
+    strong_erings(g, 15, symmetries, dist)
+end
 
 function strong_rings(rs::Vector{Vector{Int}}, g::PeriodicGraph{D}, depth=15, ringsymms::AbstractSymmetryGroup=NoSymmetryGroup(length(rs))) where D
     keep, symms = strong_erings(rs, g, depth, ringsymms)
@@ -1354,14 +1371,23 @@ function strong_rings(rs::Vector{Vector{Int}}, g::PeriodicGraph{D}, depth=15, ri
 end
 
 """
-    strong_rings(g::PeriodicGraph{D}, [depth::Integer=15,] symmetries::AbstractSymmetryGroup=NoSymmetryGroup(g), dist::DistanceRecord=DistanceRecord(g,depth)) where D
+    strong_rings([rs::Vector{Vector{Int}},] g::PeriodicGraph{D}, [depth::Integer=15,] symmetries::AbstractSymmetryGroup=NoSymmetryGroup(g), dist::DistanceRecord=DistanceRecord(g,depth)) where D
 
-Compute the list of strong rings in `g`, up to length `2*depth+3`. See [`rings`](@ref) for
-the meaning of the other arguments.
+Compute the list of strong rings in `g`, up to length `2*depth+3`. Return them with their
+symmetry group. Each ring is represented by the list of [`hash_position`](@ref) of its
+vertices.
+
+The optional first argument `rs` is the list of rings which can be provided if previously
+computed.
+
+See [`rings`](@ref) for the meaning of the other arguments.
 
 A strong ring is a cycle of the graph which cannot be decomposed into a sum of any number
 of smaller cycles. By comparison, a ring is a cycle which cannot be decomposed into a sum
 of two smaller cycles. In particular, all strong rings are rings.
+
+See also [`strong_erings`](@ref) to obtain the rings as a list of integers representing the
+edges of the ring, instead of a list of integers representing its vertices.
 """
 function strong_rings(g::PeriodicGraph, depth::Integer=15, symmetries::AbstractSymmetryGroup=NoSymmetryGroup(g), dist::DistanceRecord=DistanceRecord(g,depth))
     rs, symmg = rings(g, depth, symmetries, dist)
@@ -1433,9 +1459,6 @@ Base.@propagate_inbounds function Base.getindex(ras::RingAttributions, i::Intege
     RingIncluding(ras, i)
 end
 Base.size(ras::RingAttributions) = size(ras.attrs)
-Base.keys(ras::RingAttributions) = Base.OneTo(length(ras))
-Base.firstindex(::RingAttributions) = 1
-Base.lastindex(ras::RingAttributions) = length(ras)
 Base.IndexStyle(::Type{RingAttributions{D}}) where {D} = Base.IndexLinear()
 
 function Base.show(io::IO, ::MIME"text/plain", ras::RingAttributions)
@@ -1461,8 +1484,4 @@ function Base.getindex(ri::RingIncluding{D}, j::Integer) where {D}
     return OffsetVertexIterator{D}(.-ofs, newring)
 end
 Base.size(ri::RingIncluding) = size(ri.ras.attrs[ri.i])
-
-Base.keys(ri::RingIncluding) = Base.OneTo(length(ri))
-Base.firstindex(::RingIncluding) = 1
-Base.lastindex(ri::RingIncluding) = length(ri)
 Base.IndexStyle(::Type{RingIncluding{D}}) where {D} = Base.IndexLinear()
