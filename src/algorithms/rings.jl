@@ -793,15 +793,18 @@ function Base.getindex(rs::RingSymmetry{D}, ring::Vector{Int}) where D
     buffer = [hash_position(rs.symm[reverse_hash_position(r, rs.nvg, Val(D))], rs.nvg) for r in ring]
     first(normalize_cycle!(buffer, rs.nvg, Val(D)))
 end
+function Base.getindex(rs::RingSymmetry{D}, ring::Vector{PeriodicVertex{D}}) where D
+    buffer = [rs.symm[x] for x in ring]
+    first(normalize_cycle!(buffer))
+end
 
 struct RingSymmetryGroup{D,S,T<:AbstractSymmetryGroup{S},U} <: AbstractSymmetryGroup{RingSymmetry{D,S}}
     dict::Dict{Vector{Int},Int}
     uniques::U
     nvg::Int
     symms::T
-    v::Val{D}
     function RingSymmetryGroup{D}(dict, uniques::U, nvg, symms::T) where {D,U,T<:AbstractSymmetryGroup}
-        new{D,eltype(T),T,U}(dict, uniques, nvg, symms, Val(D))
+        new{D,eltype(T),T,U}(dict, uniques, nvg, symms)
     end
 end
 
@@ -1042,6 +1045,13 @@ function sort_cycles(g::PeriodicGraph{D}, rs, depth=maximum(length, rs; init=0),
 end
 
 # Complexity O(len(a) + len(b))
+"""
+    symdiff_cycles!(c::Vector{T}, a::Vector{T}, b::Vector{T}) where T
+
+Like [`symdiff_cycles`](@ref) but stores the result in `c`.
+
+`c` will be resized accordingly so its initial length does not matter.
+"""
 function symdiff_cycles!(c::Vector{T}, a::Vector{T}, b::Vector{T}) where T
     lenb = length(b)
     lena = length(a)
@@ -1100,6 +1110,15 @@ function symdiff_cycles!(c::Vector{T}, a::Vector{T}, b::Vector{T}) where T
     @inbounds resize!(c, (j + remaining_towritea - 1) % UInt)
     return c
 end
+
+"""
+    symdiff_cycles(a, b)
+
+Symmetric difference between two sorted lists `a` and `b`.
+Return the sorted list of elements belonging to `a` or to `b` but not to both.
+
+Use [`symdiff_cycles!`](@ref) to provide a pre-allocated destination.
+"""
 symdiff_cycles(a, b) = symdiff_cycles!(Vector{Int}(undef, length(b) + length(a) - 1), a, b)
 
 
@@ -1107,7 +1126,7 @@ symdiff_cycles(a, b) = symdiff_cycles!(Vector{Int}(undef, length(b) + length(a) 
     IterativeGaussianElimination{T}
 
 Struct containing the list of sparse columns of the matrix under gaussian elimination on
-the F₂ finite field.
+the 𝔽₂ finite field.
 
 To be used with [`PeriodicGraphs.gaussian_elimination!`](@ref) as one of the three concrete
 types:
