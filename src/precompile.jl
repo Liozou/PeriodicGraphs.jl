@@ -51,6 +51,7 @@ function _precompile_()
     end
     @enforce Base.precompile(Tuple{typeof(PeriodicGraphs.unsafe_incr!),Ptr{SmallIntT}})
     @enforce Base.precompile(Tuple{typeof(PeriodicGraphs.symdiff_cycles), Vector{Int}, Vector{Int}})
+    @enforce Base.precompile(Tuple{typeof(PeriodicGraphs.intersect_cycles), Vector{Int}, Vector{Int}})
     @enforce Base.precompile(Tuple{Type{PeriodicGraphs.IterativeGaussianEliminationLength}, Vector{Int}})
     @enforce Base.precompile(Tuple{Type{PeriodicGraphs.IterativeGaussianElimination{Vector{Int32}}}, Vector{Int}})
     @enforce Base.precompile(Tuple{Type{PeriodicGraphs.IterativeGaussianElimination{Vector{Vector{Int32}}}}, Vector{Int}})

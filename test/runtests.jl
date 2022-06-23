@@ -870,6 +870,7 @@ end
     @test length(strong_rings(house, 5)[1]) == 9
 
     @test PeriodicGraphs.symdiff_cycles([3,4], [3,5,6]) == PeriodicGraphs.symdiff_cycles([4,5,6,7,8], [7,8]) == [4,5,6]
+    @test PeriodicGraphs.intersect_cycles([3,4], [3,5,6]) == PeriodicGraphs.intersect_cycles([2,3,5], [1,3]) == [3]
 
     gausslengths = PeriodicGraphs.IterativeGaussianEliminationLength([3, 4, 7])
     @test !PeriodicGraphs.gaussian_elimination!(gausslengths, [3, 6])

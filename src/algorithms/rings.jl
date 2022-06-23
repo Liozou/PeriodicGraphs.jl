@@ -1048,7 +1048,7 @@ end
 """
     symdiff_cycles!(c::Vector{T}, a::Vector{T}, b::Vector{T}) where T
 
-Like [`symdiff_cycles`](@ref) but stores the result in `c`.
+Like [`PeriodicGraphs.symdiff_cycles`](@ref) but stores the result in `c`.
 
 `c` will be resized accordingly so its initial length does not matter.
 """
@@ -1117,7 +1117,7 @@ end
 Symmetric difference between two sorted lists `a` and `b`.
 Return the sorted list of elements belonging to `a` or to `b` but not to both.
 
-Use [`symdiff_cycles!`](@ref) to provide a pre-allocated destination.
+Use [`PeriodicGraphs.symdiff_cycles!`](@ref) to provide a pre-allocated destination.
 """
 symdiff_cycles(a, b) = symdiff_cycles!(Vector{Int}(undef, length(b) + length(a) - 1), a, b)
 
@@ -1274,6 +1274,49 @@ function retrieve_track!(ret::Vector{Int32}, buffer::Vector{Int32}, gauss::Itera
     return ret
 end
 retrieve_track!(gauss::IterativeGaussianEliminationDecomposition) = retrieve_track!(Int32[], Int32[], gauss)
+
+
+"""
+    intersect_cycles!(c::Vector{T}, a::Vector{T}, b::Vector{T}) where T
+
+Like [`PeriodicGraphs.intersect_cycles`](@ref) but stores the result in `c`.
+
+`c` will be resized accordingly so its initial length does not matter.
+"""
+function intersect_cycles!(c::Vector{T}, a::Vector{T}, b::Vector{T}) where T
+    isempty(b) && (empty!(c); return c)
+    lenb = length(b)
+    counter_b = 1
+    xb = b[counter_b]
+    j = 0
+    for xa in a
+        while xb < xa
+            counter_b += 1
+            counter_b > lenb && @goto ret
+            xb = b[counter_b]
+        end
+        if xa == xb
+            j += 1
+            c[j] = xa
+            counter_b += 1
+            counter_b > lenb && @goto ret
+        end
+    end
+    @label ret
+    resize!(c, j)
+    return c
+end
+
+"""
+    intersect_cycles(a, b)
+
+Intersection between two sorted lists `a` and `b`.
+Return the sorted list of elements belonging to both `a` and `b`.
+
+Use [`PeriodicGraphs.intersect_cycles!`](@ref) to provide a pre-allocated destination.
+"""
+intersect_cycles(a, b) = intersect_cycles!(Vector{Int}(undef, min(length(a), length(b))), a, b)
+
 
 # function retrieve_vcycle(ecycle, known_pairs)
 #     fst_pair = known_pairs[ecycle[1]]

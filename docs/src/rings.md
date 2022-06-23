@@ -166,8 +166,12 @@ PeriodicGraphs.PhantomJunctionNode
 PeriodicGraphs.arcs_list
 PeriodicGraphs.RingsEndingAt
 PeriodicGraphs.normalize_cycle!
+PeriodicGraphs.symdiff_cycles!
+PeriodicGraphs.symdiff_cycles
 PeriodicGraphs.IterativeGaussianElimination
 PeriodicGraphs.gaussian_elimination!
+PeriodicGraphs.intersect_cycles!
+PeriodicGraphs.intersect_cycles
 PeriodicGraphs.retrieve_track!
 PeriodicGraphs.rings_around
 PeriodicGraphs.EdgeDict
