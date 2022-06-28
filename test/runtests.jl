@@ -1104,7 +1104,8 @@ end
     for (str, estr) in Iterators.take(zip(strs, estrs), 5)
         @test issorted(estr)
         for e in estr
-            @test get!(kp, kp[e]) == e
+            _e = kp[e]
+            @test get!(kp, _e) == kp[_e] == e
         end
         lenstr = length(str)
         _edgestr = [minmax(str[i], str[mod1(i+1,lenstr)]) for i in 1:lenstr]

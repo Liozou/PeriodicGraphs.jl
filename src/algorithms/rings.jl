@@ -963,6 +963,7 @@ function Base.get!(kp::EdgeDict{D}, x::VertexPair{D}) where D
 end
 
 Base.getindex(kp::EdgeDict, i::Integer) = kp.direct[i]
+Base.getindex(kp::EdgeDict, x::VertexPair) = kp.reverse[x]
 
 """
     unique_order(cycles)
