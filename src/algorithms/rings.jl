@@ -1119,6 +1119,14 @@ Symmetric difference between two sorted lists `a` and `b`.
 Return the sorted list of elements belonging to `a` or to `b` but not to both.
 
 Use [`PeriodicGraphs.symdiff_cycles!`](@ref) to provide a pre-allocated destination.
+
+## Example
+```jldoctest
+julia> PeriodicGraphs.symdiff_cycles([3,4,5], [4,5,6])
+2-element Vector{Int64}:
+ 3
+ 6
+```
 """
 symdiff_cycles(a, b) = symdiff_cycles!(Vector{Int}(undef, length(b) + length(a) - 1), a, b)
 
@@ -1282,7 +1290,8 @@ retrieve_track!(gauss::IterativeGaussianEliminationDecomposition) = retrieve_tra
 
 Like [`PeriodicGraphs.intersect_cycles`](@ref) but stores the result in `c`.
 
-`c` will be resized accordingly so its initial length does not matter.
+`c` will be resized accordingly so its initial length does not matter as long as it is
+at least as large as the resulting list.
 """
 function intersect_cycles!(c::Vector{T}, a::Vector{T}, b::Vector{T}) where T
     isempty(b) && (empty!(c); return c)
@@ -1301,6 +1310,7 @@ function intersect_cycles!(c::Vector{T}, a::Vector{T}, b::Vector{T}) where T
             c[j] = xa
             counter_b += 1
             counter_b > lenb && @goto ret
+            xb = b[counter_b]
         end
     end
     @label ret
@@ -1315,9 +1325,85 @@ Intersection between two sorted lists `a` and `b`.
 Return the sorted list of elements belonging to both `a` and `b`.
 
 Use [`PeriodicGraphs.intersect_cycles!`](@ref) to provide a pre-allocated destination.
+
+## Example
+```jldoctest
+julia> PeriodicGraphs.intersect_cycles([3,4,5], [4,5,6])
+2-element Vector{Int64}:
+ 4
+ 5
+```
 """
 intersect_cycles(a, b) = intersect_cycles!(Vector{Int}(undef, min(length(a), length(b))), a, b)
 
+
+"""
+    union_cycles!(c::Vector{T}, a::Vector{T}, b::Vector{T}) where T
+
+Like [`PeriodicGraphs.union_cycles`](@ref) but stores the result in `c`.
+
+`c` will be resized accordingly so its initial length does not matter as long as it is
+at least as large as the resulting list.
+"""
+function union_cycles!(c::Vector{T}, a::Vector{T}, b::Vector{T}) where T
+    lenb = length(b)
+    lena = length(a)
+    counter_a = 0
+    counter_b = 1
+    y = lenb == 0 ? typemax(Int) : (@inbounds b[1])
+    j = 1
+    @inbounds while counter_a < lena
+        counter_a += 1
+        x = a[counter_a]
+        while y < x
+            c[j] = y
+            j += 1
+            counter_b += 1
+            counter_b > lenb && @goto fillenda
+            y = b[counter_b]
+        end
+        c[j] = x
+        j += 1
+        if y == x
+            counter_b += 1
+            if counter_b > lenb
+                counter_a += 1
+                @goto fillenda
+            end
+            y = b[counter_b]
+        end
+    end
+    remaining_towriteb = lenb - counter_b + 1
+    remaining_towriteb > 0 && unsafe_copyto!(c, j, b, counter_b, remaining_towriteb)
+    @inbounds resize!(c, (j + remaining_towriteb - 1) % UInt)
+    return c
+
+    @label fillenda
+    remaining_towritea = lena - counter_a + 1
+    remaining_towritea > 0 && unsafe_copyto!(c, j, a, counter_a, remaining_towritea)
+    @inbounds resize!(c, (j + remaining_towritea - 1) % UInt)
+    return c
+end
+
+"""
+    union_cycles(a, b)
+
+Union between two sorted lists `a` and `b`.
+Return the sorted list of elements belonging to `a` or `b` or both.
+
+Use [`PeriodicGraphs.union_cycles!`](@ref) to provide a pre-allocated destination.
+
+## Example
+```jldoctest
+julia> PeriodicGraphs.union_cycles([3,4,5], [4,5,6])
+4-element Vector{Int64}:
+ 3
+ 4
+ 5
+ 6
+```
+"""
+union_cycles(a, b) = union_cycles!(Vector{Int}(undef, length(a) + length(b)), a, b)
 
 # function retrieve_vcycle(ecycle, known_pairs)
 #     fst_pair = known_pairs[ecycle[1]]

@@ -172,6 +172,8 @@ PeriodicGraphs.IterativeGaussianElimination
 PeriodicGraphs.gaussian_elimination!
 PeriodicGraphs.intersect_cycles!
 PeriodicGraphs.intersect_cycles
+PeriodicGraphs.union_cycles!
+PeriodicGraphs.union_cycles
 PeriodicGraphs.retrieve_track!
 PeriodicGraphs.rings_around
 PeriodicGraphs.EdgeDict
