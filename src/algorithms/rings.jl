@@ -994,12 +994,14 @@ end
 
 
 """
-    convert_to_ering!(buffer, ring::Vector{PeriodicVertex{D}}, len, kp::EdgeDict{D}, ofs) where D
+    convert_to_ering!(buffer::Vector{Int}, ring::Vector{PeriodicVertex{D}}, kp::EdgeDict{D}, ofs, len) where D
 
 Return the edge ring corresponding to `OffsetVertexIterator{D}(ring[1:len], ofs)` inside
 `buffer`, resized to length `len`.
+
+See also [`PeriodicGraphs.convert_to_ering`](@ref).
 """
-function convert_to_ering!(buffer, ring::Vector{PeriodicVertex{D}}, len, kp::EdgeDict{D}, ofs) where D
+function convert_to_ering!(buffer::Vector{Int}, ring::Vector{PeriodicVertex{D}}, kp::EdgeDict{D}, ofs, len) where D
     resize!(buffer, len)
     _last_p = ring[len]
     last_p = PeriodicVertex{D}(_last_p.v, _last_p.ofs .+ ofs)
@@ -1010,6 +1012,17 @@ function convert_to_ering!(buffer, ring::Vector{PeriodicVertex{D}}, len, kp::Edg
         last_p = new_p
     end
     sort!(buffer)
+end
+
+"""
+    convert_to_ering(ring::Vector{PeriodicVertex{D}}, kp::EdgeDict{D}, ofs=zero(SVector{D,Int}), len=length(ring)) where D
+
+Return the edge ring corresponding to `OffsetVertexIterator{D}(ring[1:len], ofs)`.
+
+See also [`PeriodicGraphs.convert_to_ering!`](@ref) to provide a buffer.
+"""
+function convert_to_ering(ring::Vector{PeriodicVertex{D}}, kp::EdgeDict{D}, ofs=zero(SVector{D,Int}), len=length(ring)) where D
+    return convert_to_ering!(Int[], ring, kp, ofs, len)
 end
 
 
@@ -1030,7 +1043,6 @@ function sort_cycles(g::PeriodicGraph{D}, rs, depth=maximum(length, rs; init=0),
     cycles = Vector{Vector{Int}}(undef, tot_ofss * length(rs))
     origin = zeros(Int, length(cycles))
     ringbuffer = Vector{PeriodicVertex{D}}(undef, 2*depth+3)
-    buffer = Vector{PeriodicVertex{D}}(undef, length(ringbuffer))
     zero_ofs = (tot_ofss+1) ÷ 2
     for (i, ring) in enumerate(rs)
         base = (i-1)*tot_ofss
@@ -1039,8 +1051,7 @@ function sort_cycles(g::PeriodicGraph{D}, rs, depth=maximum(length, rs; init=0),
         end
         origin[base+zero_ofs] = i
         for (i_ofs, ofs) in enumerate(ofss)
-            convert_to_ering!(buffer, ringbuffer, length(ring), kp, ofs)
-            cycles[base+i_ofs] = copy(buffer)
+            cycles[base+i_ofs] = convert_to_ering(ringbuffer, kp, ofs, length(ring))
         end
     end
     I = unique_order(cycles)

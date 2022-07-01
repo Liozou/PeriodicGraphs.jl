@@ -179,4 +179,5 @@ PeriodicGraphs.rings_around
 PeriodicGraphs.EdgeDict
 strong_erings
 PeriodicGraphs.convert_to_ering!
+PeriodicGraphs.convert_to_ering
 ```
