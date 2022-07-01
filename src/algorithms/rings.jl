@@ -997,9 +997,10 @@ end
     convert_to_ering!(buffer, ring::Vector{PeriodicVertex{D}}, len, kp::EdgeDict{D}, ofs) where D
 
 Return the edge ring corresponding to `OffsetVertexIterator{D}(ring[1:len], ofs)` inside
-`buffer[1:len]`.
+`buffer`, resized to length `len`.
 """
 function convert_to_ering!(buffer, ring::Vector{PeriodicVertex{D}}, len, kp::EdgeDict{D}, ofs) where D
+    resize!(buffer, len)
     _last_p = ring[len]
     last_p = PeriodicVertex{D}(_last_p.v, _last_p.ofs .+ ofs)
     for j in 1:len
@@ -1008,6 +1009,7 @@ function convert_to_ering!(buffer, ring::Vector{PeriodicVertex{D}}, len, kp::Edg
         buffer[j] = get!(kp, minmax(last_p, new_p))
         last_p = new_p
     end
+    sort!(buffer)
 end
 
 
@@ -1027,8 +1029,8 @@ function sort_cycles(g::PeriodicGraph{D}, rs, depth=maximum(length, rs; init=0),
     tot_ofss = length(ofss)
     cycles = Vector{Vector{Int}}(undef, tot_ofss * length(rs))
     origin = zeros(Int, length(cycles))
-    buffer = Vector{Int}(undef, 2*depth+3)
-    ringbuffer = Vector{PeriodicVertex{D}}(undef, length(buffer))
+    ringbuffer = Vector{PeriodicVertex{D}}(undef, 2*depth+3)
+    buffer = Vector{PeriodicVertex{D}}(undef, length(ringbuffer))
     zero_ofs = (tot_ofss+1) ÷ 2
     for (i, ring) in enumerate(rs)
         base = (i-1)*tot_ofss
@@ -1038,7 +1040,7 @@ function sort_cycles(g::PeriodicGraph{D}, rs, depth=maximum(length, rs; init=0),
         origin[base+zero_ofs] = i
         for (i_ofs, ofs) in enumerate(ofss)
             convert_to_ering!(buffer, ringbuffer, length(ring), kp, ofs)
-            cycles[base+i_ofs] = sort!(buffer[1:length(ring)])
+            cycles[base+i_ofs] = copy(buffer)
         end
     end
     I = unique_order(cycles)
