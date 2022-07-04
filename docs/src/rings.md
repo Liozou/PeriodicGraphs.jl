@@ -170,6 +170,7 @@ PeriodicGraphs.symdiff_cycles!
 PeriodicGraphs.symdiff_cycles
 PeriodicGraphs.IterativeGaussianElimination
 PeriodicGraphs.gaussian_elimination!
+PeriodicGraphs.gaussian_elimination
 PeriodicGraphs.intersect_cycles!
 PeriodicGraphs.intersect_cycles
 PeriodicGraphs.union_cycles!

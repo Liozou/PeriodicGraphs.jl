@@ -1187,26 +1187,7 @@ end
 IterativeGaussianElimination(ring, sizehint=ring[1]) = IterativeGaussianEliminationNone(ring, sizehint)
 IterativeGaussianElimination() = IterativeGaussianEliminationNone()
 
-# For an IterativeGaussianElimination of i rings of size at most l, symdiff_cycles cost at
-# most (l + lenr) + (2l + lenr) + ... + (il + lenr) = O(i^2*l +i*lenr)
-# If the size of the k-th ring is at most k*l, then the worst-case complexity is O(i^3*l)
-# Calling gaussian_elimination ν times thus leads to a worst-case complexity in O(ν^4*l)
-# The reasonning can probably be refined...
-"""
-    gaussian_elimination!(gauss::IterativeGaussianElimination, r::Vector{Int}) where T
-
-Test whether `r` can be expressed as a sum of vectors stored in `gauss`, and store `r` if
-not. "sum" refers to the symmetric difference of boolean vectors, represented in sparse
-format as the ordered list of non-zero indices.
-
-If `gauss isa IterativeGaussianEliminationLength`, return whether `r` can be expressed as a
-sum of strictly smaller vectors.
-
-Otherwise, return `true` when `r` is a sum of any previously encoutered vectors.
-If `gauss` isa `IterativeGaussianEliminationDecomposition`, query `retrieve_track(gauss)`
-to obtain the sorted list of indices of such previously encountered vectors.
-"""
-function gaussian_elimination!(gauss::IterativeGaussianElimination{T}, r::Vector{Int}) where T
+function _gaussian_elimination(gauss::IterativeGaussianElimination{T}, r::Vector{Int}) where T
     rings = gauss.rings
     shortcuts = gauss.shortcuts
     buffer1::Vector{Int} = gauss.buffer1
@@ -1220,6 +1201,7 @@ function gaussian_elimination!(gauss::IterativeGaussianElimination{T}, r::Vector
         empty!(track)
     end
     r1 = r[1]
+    maxlen = 0
 
     idx::Int32 = r1 > lenshort ? zero(Int32) : shortcuts[r1]
     if !iszero(idx)
@@ -1230,7 +1212,7 @@ function gaussian_elimination!(gauss::IterativeGaussianElimination{T}, r::Vector
             push!(track, idx)
         end
         symdiff_cycles!(buffer1, r, ridx)
-        isempty(buffer1) && @goto notindependentreturn
+        isempty(buffer1) && return true, r1, maxlen, buffer1
         r1 = buffer1[1]
         idx = r1 > lenshort ? zero(Int32) : shortcuts[r1]
     else
@@ -1244,10 +1226,64 @@ function gaussian_elimination!(gauss::IterativeGaussianElimination{T}, r::Vector
             push!(track, idx)
         end
         symdiff_cycles!(buffer2, buffer1, ridx)
-        isempty(buffer2) && @goto notindependentreturn
+        isempty(buffer2) && return true, r1, maxlen, buffer1
         r1 = buffer2[1]
         idx = r1 > lenshort ? zero(Int32) : shortcuts[r1]
         buffer2, buffer1 = buffer1, buffer2
+    end
+
+    return false, r1, maxlen, buffer1
+end
+
+"""
+    gaussian_elimination(gauss::IterativeGaussianElimination, r::Vector{Int})
+
+Test whether `r` can be expressed as a sum of vectors stored in `gauss`.
+
+See [`PeriodicGraphs.gaussian_elimination!`](@ref) to store `r` in `gauss` if not, and for
+more details dependending on the type of `gauss`.
+"""
+gaussian_elimination(gauss::IterativeGaussianElimination, r::Vector{Int}) = first(_gaussian_elimination(gauss, r))
+
+# For an IterativeGaussianElimination of i rings of size at most l, symdiff_cycles cost at
+# most (l + lenr) + (2l + lenr) + ... + (il + lenr) = O(i^2*l +i*lenr)
+# If the size of the k-th ring is at most k*l, then the worst-case complexity is O(i^3*l)
+# Calling gaussian_elimination ν times thus leads to a worst-case complexity in O(ν^4*l)
+# The reasonning can probably be refined...
+"""
+    gaussian_elimination!(gauss::IterativeGaussianElimination, r::Vector{Int})
+
+Test whether `r` can be expressed as a sum of vectors stored in `gauss`, and store `r` if
+not. "sum" refers to the symmetric difference of boolean vectors, represented in sparse
+format as the ordered list of non-zero indices.
+
+If `gauss isa IterativeGaussianEliminationLength`, return whether `r` can be expressed as a
+sum of strictly smaller vectors.
+
+Otherwise, return `true` when `r` is a sum of any previously encoutered vectors.
+If `gauss` isa `IterativeGaussianEliminationDecomposition`, query `retrieve_track(gauss)`
+to obtain the sorted list of indices of such previously encountered vectors.
+
+See also [`gaussian_elimination`](@ref) to test `r` without storing it.
+"""
+function gaussian_elimination!(gauss::IterativeGaussianElimination{T}, r::Vector{Int}) where T
+    rings = gauss.rings
+    shortcuts = gauss.shortcuts
+    if gauss isa IterativeGaussianEliminationLength
+        len = length(r) % UInt8
+    elseif gauss isa IterativeGaussianEliminationDecomposition
+        track::Vector{Int32} = first(gauss.track)
+    end
+
+    notindependent, r1, maxlen, buffer1 = _gaussian_elimination(gauss, r)
+
+    if notindependent
+        gauss isa IterativeGaussianEliminationLength && return maxlen < len
+        if gauss isa IterativeGaussianEliminationDecomposition
+            push!(rings, buffer1) # dummy, used to keep track of dependent rings
+            push!(last(gauss.track), track) # also dummy
+        end
+        return true
     end
 
     push!(rings, copy(buffer1))
@@ -1255,19 +1291,11 @@ function gaussian_elimination!(gauss::IterativeGaussianElimination{T}, r::Vector
     shortcuts[r1] = length(rings) % Int32
     if gauss isa IterativeGaussianEliminationLength
         # the ring was not a sum of strictly smaller ones (since it's not a sum of previous ones at all)
-        push!(lengths, len)
+        push!(gauss.track, len)
     elseif gauss isa IterativeGaussianEliminationDecomposition
         push!(last(gauss.track), copy(sort!(track)))
     end
     return false # the new ring was independent from the other ones
-
-    @label notindependentreturn
-    gauss isa IterativeGaussianEliminationLength && return maxlen < len
-    if gauss isa IterativeGaussianEliminationDecomposition
-        push!(rings, buffer2) # dummy, used to keep track of dependent rings
-        push!(last(gauss.track), track) # also dummy
-    end
-    return true
 end
 
 """

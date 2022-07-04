@@ -736,6 +736,56 @@ end
     end
 end
 
+@testset "Iterative gaussian elimination" begin
+    gausslengths = PeriodicGraphs.IterativeGaussianEliminationLength([3, 4, 7])
+    @test !PeriodicGraphs.gaussian_elimination!(gausslengths, [3, 6])
+    @test !PeriodicGraphs.gaussian_elimination!(gausslengths, [4, 7])
+    @test !PeriodicGraphs.gaussian_elimination!(gausslengths, [1, 3, 5])
+    @test length(gausslengths.track) == length(gausslengths.rings) == 4
+    @test PeriodicGraphs.gaussian_elimination(gausslengths, [1, 4, 5, 7])
+    @test PeriodicGraphs.gaussian_elimination!(gausslengths, [1, 4, 5, 7])
+    @test length(gausslengths.track) == length(gausslengths.rings) == 4
+    @test !PeriodicGraphs.gaussian_elimination!(gausslengths, [3, 5, 6, 7])
+    @test !PeriodicGraphs.gaussian_elimination(gausslengths, [2, 3])
+    @test !PeriodicGraphs.gaussian_elimination!(gausslengths, [2, 3])
+    @test !PeriodicGraphs.gaussian_elimination!(gausslengths, [1, 2, 3])
+    @test length(gausslengths.track) == length(gausslengths.rings) == 7
+
+    gaussnone = PeriodicGraphs.IterativeGaussianElimination([3, 4, 7])
+    @test !PeriodicGraphs.gaussian_elimination!(gaussnone, [3, 6])
+    @test !PeriodicGraphs.gaussian_elimination!(gaussnone, [4, 7])
+    @test !PeriodicGraphs.gaussian_elimination!(gaussnone, [1, 3, 5])
+    @test length(gaussnone.rings) == 4
+    @test PeriodicGraphs.gaussian_elimination(gaussnone, [1, 4, 5, 7])
+    @test PeriodicGraphs.gaussian_elimination!(gaussnone, [1, 4, 5, 7])
+    @test !PeriodicGraphs.gaussian_elimination!(gaussnone, [3, 5, 6, 7])
+    @test !PeriodicGraphs.gaussian_elimination!(gaussnone, [2, 3])
+    @test !PeriodicGraphs.gaussian_elimination(gaussnone, [1, 2, 3])
+    @test !PeriodicGraphs.gaussian_elimination!(gaussnone, [1, 2, 3])
+    @test PeriodicGraphs.gaussian_elimination!(gaussnone, [1, 2, 3])
+    @test gaussnone.shortcuts == Int32[4, 6, 1, 2, 5, 3, 7]
+    length(gaussnone.rings) == 7
+
+    gausstrack = PeriodicGraphs.IterativeGaussianEliminationDecomposition([3, 4, 7])
+    @test !PeriodicGraphs.gaussian_elimination!(gausstrack, [3, 6])
+    @test !PeriodicGraphs.gaussian_elimination!(gausstrack, [4, 7])
+    @test !PeriodicGraphs.gaussian_elimination!(gausstrack, [1, 3, 5])
+    @test length(gausstrack.rings) == 4
+    @test PeriodicGraphs.gaussian_elimination(gausstrack, [1, 4, 5, 7])
+    @test PeriodicGraphs.gaussian_elimination!(gausstrack, [1, 4, 5, 7])
+    @test PeriodicGraphs.retrieve_track!(gausstrack) == Int32[5, 4, 1]
+    @test !PeriodicGraphs.gaussian_elimination!(gausstrack, [3, 5, 6, 7])
+    @test !PeriodicGraphs.gaussian_elimination!(gausstrack, [2, 3])
+    @test !PeriodicGraphs.gaussian_elimination(gausstrack, [1, 2, 3])
+    @test !PeriodicGraphs.gaussian_elimination!(gausstrack, [1, 2, 3])
+    @test PeriodicGraphs.gaussian_elimination!(gausstrack, [1, 2, 3])
+    @test PeriodicGraphs.retrieve_track!(gausstrack) == Int32[9, 8]
+    @test gausstrack.shortcuts == Int32[4, 7, 1, 2, 6, 3, 8]
+    @test length(gausstrack.rings) == 9
+
+    @test PeriodicGraphs.IterativeGaussianElimination().track == PeriodicGraphs.IterativeGaussianElimination{Nothing}().track == nothing
+end
+
 const cpi = PeriodicGraph("2 1 2 0 0 1 3 0 0 1 4 0 0 1 5 0 0 2 3 0 -1 2 5 1 -1 3 4 1 0 4 5 0 -1");
 const nab = PeriodicGraph("3 1 2 0 -1 0 1 3 0 -1 -1 1 4 -1 0 0 1 5 -1 0 -1 2 3 0 0 -1 2 4 -1 0 0 2 5 -1 0 -1 3 4 0 0 0 3 5 0 0 0 4 5 0 0 0");
 const cai = PeriodicGraph("3 1 1 1 0 0 1 2 0 0 0 1 3 0 0 0 1 4 0 0 0 1 5 0 0 0 2 2 1 0 0 2 5 0 -1 0 2 6 0 0 0 3 3 1 0 0 3 4 0 0 1 3 6 0 0 1 4 4 1 0 0 4 6 0 1 0 5 5 1 0 0 5 6 0 1 1 6 6 1 0 0");
@@ -874,48 +924,6 @@ end
     @test PeriodicGraphs.intersect_cycles([3,4,5], [4,5,6]) == PeriodicGraphs.intersect_cycles([4,5,7], [2,4,5,6]) == [4,5]
     @test PeriodicGraphs.union_cycles([3,4], [4,5,6]) == PeriodicGraphs.union_cycles([4,5,6], [3,4]) == [3,4,5,6]
     @test PeriodicGraphs.union_cycles([4,6], [3,5,6]) == PeriodicGraphs.union_cycles([3,5,6], [3,4,6]) == [3,4,5,6]
-
-    gausslengths = PeriodicGraphs.IterativeGaussianEliminationLength([3, 4, 7])
-    @test !PeriodicGraphs.gaussian_elimination!(gausslengths, [3, 6])
-    @test !PeriodicGraphs.gaussian_elimination!(gausslengths, [4, 7])
-    @test !PeriodicGraphs.gaussian_elimination!(gausslengths, [1, 3, 5])
-    @test length(gausslengths.track) == length(gausslengths.rings) == 4
-    @test PeriodicGraphs.gaussian_elimination!(gausslengths, [1, 4, 5, 7])
-    @test length(gausslengths.track) == length(gausslengths.rings) == 4
-    @test !PeriodicGraphs.gaussian_elimination!(gausslengths, [3, 5, 6, 7])
-    @test !PeriodicGraphs.gaussian_elimination!(gausslengths, [2, 3])
-    @test !PeriodicGraphs.gaussian_elimination!(gausslengths, [1, 2, 3])
-    @test length(gausslengths.track) == length(gausslengths.rings) == 7
-
-    gaussnone = PeriodicGraphs.IterativeGaussianElimination([3, 4, 7])
-    @test !PeriodicGraphs.gaussian_elimination!(gaussnone, [3, 6])
-    @test !PeriodicGraphs.gaussian_elimination!(gaussnone, [4, 7])
-    @test !PeriodicGraphs.gaussian_elimination!(gaussnone, [1, 3, 5])
-    @test length(gaussnone.rings) == 4
-    @test PeriodicGraphs.gaussian_elimination!(gaussnone, [1, 4, 5, 7])
-    @test !PeriodicGraphs.gaussian_elimination!(gaussnone, [3, 5, 6, 7])
-    @test !PeriodicGraphs.gaussian_elimination!(gaussnone, [2, 3])
-    @test !PeriodicGraphs.gaussian_elimination!(gaussnone, [1, 2, 3])
-    @test PeriodicGraphs.gaussian_elimination!(gaussnone, [1, 2, 3])
-    @test gaussnone.shortcuts == Int32[4, 6, 1, 2, 5, 3, 7]
-    length(gaussnone.rings) == 7
-
-    gausstrack = PeriodicGraphs.IterativeGaussianEliminationDecomposition([3, 4, 7])
-    @test !PeriodicGraphs.gaussian_elimination!(gausstrack, [3, 6])
-    @test !PeriodicGraphs.gaussian_elimination!(gausstrack, [4, 7])
-    @test !PeriodicGraphs.gaussian_elimination!(gausstrack, [1, 3, 5])
-    @test length(gausstrack.rings) == 4
-    @test PeriodicGraphs.gaussian_elimination!(gausstrack, [1, 4, 5, 7])
-    @test PeriodicGraphs.retrieve_track!(gausstrack) == Int32[5, 4, 1]
-    @test !PeriodicGraphs.gaussian_elimination!(gausstrack, [3, 5, 6, 7])
-    @test !PeriodicGraphs.gaussian_elimination!(gausstrack, [2, 3])
-    @test !PeriodicGraphs.gaussian_elimination!(gausstrack, [1, 2, 3])
-    @test PeriodicGraphs.gaussian_elimination!(gausstrack, [1, 2, 3])
-    @test PeriodicGraphs.retrieve_track!(gausstrack) == Int32[9, 8]
-    @test gausstrack.shortcuts == Int32[4, 7, 1, 2, 6, 3, 8]
-    @test length(gausstrack.rings) == 9
-
-    @test PeriodicGraphs.IterativeGaussianElimination().track == PeriodicGraphs.IterativeGaussianElimination{Nothing}().track == nothing
 
     # keep track of the limitations
     @test_throws ErrorException rings(lta, 63)
