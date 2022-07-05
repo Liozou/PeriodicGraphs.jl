@@ -742,12 +742,13 @@ end
     @test !PeriodicGraphs.gaussian_elimination!(gausslengths, [4, 7])
     @test !PeriodicGraphs.gaussian_elimination!(gausslengths, [1, 3, 5])
     @test length(gausslengths.track) == length(gausslengths.rings) == 4
-    @test PeriodicGraphs.gaussian_elimination(gausslengths, [1, 4, 5, 7])
+    @test first(PeriodicGraphs.gaussian_elimination(gausslengths, [1, 4, 5, 7]))
     @test PeriodicGraphs.gaussian_elimination!(gausslengths, [1, 4, 5, 7])
     @test length(gausslengths.track) == length(gausslengths.rings) == 4
     @test !PeriodicGraphs.gaussian_elimination!(gausslengths, [3, 5, 6, 7])
-    @test !PeriodicGraphs.gaussian_elimination(gausslengths, [2, 3])
-    @test !PeriodicGraphs.gaussian_elimination!(gausslengths, [2, 3])
+    notindependent, info = PeriodicGraphs.gaussian_elimination(gausslengths, [2, 3])
+    @test !notindependent
+    @test !PeriodicGraphs.gaussian_elimination!(gausslengths, [2, 3], notindependent, info)
     @test !PeriodicGraphs.gaussian_elimination!(gausslengths, [1, 2, 3])
     @test length(gausslengths.track) == length(gausslengths.rings) == 7
 
@@ -756,11 +757,11 @@ end
     @test !PeriodicGraphs.gaussian_elimination!(gaussnone, [4, 7])
     @test !PeriodicGraphs.gaussian_elimination!(gaussnone, [1, 3, 5])
     @test length(gaussnone.rings) == 4
-    @test PeriodicGraphs.gaussian_elimination(gaussnone, [1, 4, 5, 7])
+    @test first(PeriodicGraphs.gaussian_elimination(gaussnone, [1, 4, 5, 7]))
     @test PeriodicGraphs.gaussian_elimination!(gaussnone, [1, 4, 5, 7])
     @test !PeriodicGraphs.gaussian_elimination!(gaussnone, [3, 5, 6, 7])
     @test !PeriodicGraphs.gaussian_elimination!(gaussnone, [2, 3])
-    @test !PeriodicGraphs.gaussian_elimination(gaussnone, [1, 2, 3])
+    @test !first(PeriodicGraphs.gaussian_elimination(gaussnone, [1, 2, 3]))
     @test !PeriodicGraphs.gaussian_elimination!(gaussnone, [1, 2, 3])
     @test PeriodicGraphs.gaussian_elimination!(gaussnone, [1, 2, 3])
     @test gaussnone.shortcuts == Int32[4, 6, 1, 2, 5, 3, 7]
@@ -771,12 +772,13 @@ end
     @test !PeriodicGraphs.gaussian_elimination!(gausstrack, [4, 7])
     @test !PeriodicGraphs.gaussian_elimination!(gausstrack, [1, 3, 5])
     @test length(gausstrack.rings) == 4
-    @test PeriodicGraphs.gaussian_elimination(gausstrack, [1, 4, 5, 7])
-    @test PeriodicGraphs.gaussian_elimination!(gausstrack, [1, 4, 5, 7])
+    notindependent, info = PeriodicGraphs.gaussian_elimination(gausstrack, [1, 4, 5, 7])
+    @test notindependent
+    @test PeriodicGraphs.gaussian_elimination!(gausstrack, [1, 4, 5, 7], notindependent, info)
     @test PeriodicGraphs.retrieve_track!(gausstrack) == Int32[5, 4, 1]
     @test !PeriodicGraphs.gaussian_elimination!(gausstrack, [3, 5, 6, 7])
     @test !PeriodicGraphs.gaussian_elimination!(gausstrack, [2, 3])
-    @test !PeriodicGraphs.gaussian_elimination(gausstrack, [1, 2, 3])
+    @test !first(PeriodicGraphs.gaussian_elimination(gausstrack, [1, 2, 3]))
     @test !PeriodicGraphs.gaussian_elimination!(gausstrack, [1, 2, 3])
     @test PeriodicGraphs.gaussian_elimination!(gausstrack, [1, 2, 3])
     @test PeriodicGraphs.retrieve_track!(gausstrack) == Int32[9, 8]

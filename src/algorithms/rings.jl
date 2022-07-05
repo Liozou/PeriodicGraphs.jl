@@ -1187,7 +1187,19 @@ end
 IterativeGaussianElimination(ring, sizehint=ring[1]) = IterativeGaussianEliminationNone(ring, sizehint)
 IterativeGaussianElimination() = IterativeGaussianEliminationNone()
 
-function _gaussian_elimination(gauss::IterativeGaussianElimination{T}, r::Vector{Int}) where T
+"""
+    gaussian_elimination(gauss::IterativeGaussianElimination, r::Vector{Int})
+
+Return `notindependent, info` where `notindependent` is `true` if `r` can be expressed as a
+sum of vectors stored in `gauss`.
+
+See [`PeriodicGraphs.gaussian_elimination!`](@ref) to store `r` in `gauss` if not, and for
+more details dependending on the type of `gauss`.
+
+Call `PeriodicGraphs.gaussian_elimination!(gauss, r, notindependent, info)` to obtain the
+result of `PeriodicGraphs.gaussian_elimination!(gauss, r)` without duplicating computation.
+"""
+function gaussian_elimination(gauss::IterativeGaussianElimination{T}, r::Vector{Int}) where T
     rings = gauss.rings
     shortcuts = gauss.shortcuts
     buffer1::Vector{Int} = gauss.buffer1
@@ -1212,7 +1224,7 @@ function _gaussian_elimination(gauss::IterativeGaussianElimination{T}, r::Vector
             push!(track, idx)
         end
         symdiff_cycles!(buffer1, r, ridx)
-        isempty(buffer1) && return true, r1, maxlen, buffer1
+        isempty(buffer1) && return true, (r1, maxlen, buffer1)
         r1 = buffer1[1]
         idx = r1 > lenshort ? zero(Int32) : shortcuts[r1]
     else
@@ -1226,24 +1238,15 @@ function _gaussian_elimination(gauss::IterativeGaussianElimination{T}, r::Vector
             push!(track, idx)
         end
         symdiff_cycles!(buffer2, buffer1, ridx)
-        isempty(buffer2) && return true, r1, maxlen, buffer1
+        isempty(buffer2) && return true, (r1, maxlen, buffer1)
         r1 = buffer2[1]
         idx = r1 > lenshort ? zero(Int32) : shortcuts[r1]
         buffer2, buffer1 = buffer1, buffer2
     end
 
-    return false, r1, maxlen, buffer1
+    return false, (r1, maxlen, buffer1)
 end
 
-"""
-    gaussian_elimination(gauss::IterativeGaussianElimination, r::Vector{Int})
-
-Test whether `r` can be expressed as a sum of vectors stored in `gauss`.
-
-See [`PeriodicGraphs.gaussian_elimination!`](@ref) to store `r` in `gauss` if not, and for
-more details dependending on the type of `gauss`.
-"""
-gaussian_elimination(gauss::IterativeGaussianElimination, r::Vector{Int}) = first(_gaussian_elimination(gauss, r))
 
 # For an IterativeGaussianElimination of i rings of size at most l, symdiff_cycles cost at
 # most (l + lenr) + (2l + lenr) + ... + (il + lenr) = O(i^2*l +i*lenr)
@@ -1267,6 +1270,11 @@ to obtain the sorted list of indices of such previously encountered vectors.
 See also [`gaussian_elimination`](@ref) to test `r` without storing it.
 """
 function gaussian_elimination!(gauss::IterativeGaussianElimination{T}, r::Vector{Int}) where T
+    notindependent, info = gaussian_elimination(gauss, r)
+    gaussian_elimination!(gauss, r, notindependent, info)
+end
+
+function gaussian_elimination!(gauss::IterativeGaussianElimination{T}, r::Vector{Int}, notindependent, (r1, maxlen, buffer1)) where T
     rings = gauss.rings
     shortcuts = gauss.shortcuts
     if gauss isa IterativeGaussianEliminationLength
@@ -1274,8 +1282,6 @@ function gaussian_elimination!(gauss::IterativeGaussianElimination{T}, r::Vector
     elseif gauss isa IterativeGaussianEliminationDecomposition
         track::Vector{Int32} = first(gauss.track)
     end
-
-    notindependent, r1, maxlen, buffer1 = _gaussian_elimination(gauss, r)
 
     if notindependent
         gauss isa IterativeGaussianEliminationLength && return maxlen < len
