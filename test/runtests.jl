@@ -1124,6 +1124,7 @@ end
         _edgestr = [minmax(str[i], str[mod1(i+1,lenstr)]) for i in 1:lenstr]
         @test issetequal(_edgestr, minmax(hash_position.(kp[e], nv(lta))...) for e in estr)
     end
+    @test length(kp) == 9747
 end
 
 @testset "Simple symmetries" begin

@@ -643,7 +643,7 @@ represent the same cycle, possibly translated to a different unit cell or rotate
 The graph `g::PeriodicGraph{D}` is represented as `n = nv(g)` and `v = Val(D)`
 """
 function normalize_cycle!(cycle::Vector{Int}, n, v::Val{D}) where D
-    minval, fst = findmin(x -> mod1(x, n), cycle)
+    minval, fst = findmin(Base.Fix2(mod1, n), cycle)
     ofsfst = reverse_hash_position(fld1(cycle[fst], n) - 1, v)
     lenc = length(cycle)
     for i in fst+1:lenc
@@ -683,7 +683,11 @@ function normalize_cycle!(cycle::Vector{PeriodicVertex{D}}) where D
         endreverse && reverse!(cycle)
     end
     ofsfst = minval.ofs
-    iszero(ofsfst) || map!(c -> PeriodicVertex{D}(c.v, c.ofs - ofsfst), cycle, cycle)
+    if !iszero(ofsfst)
+        for (i, c) in enumerate(cycle)
+            cycle[i] = PeriodicVertex{D}(c.v, c.ofs - ofsfst)
+        end
+    end
     cycle, ofsfst
 end
 
@@ -955,8 +959,9 @@ struct EdgeDict{D}
     end
 end
 
+Base.length(kp::EdgeDict) = length(kp.direct)
 function Base.get!(kp::EdgeDict{D}, x::VertexPair{D}) where D
-    n = length(kp.direct) + 1
+    n = length(kp) + 1
     pairid = get!(kp.reverse, x, n)
     pairid == n && push!(kp.direct, x)
     pairid
