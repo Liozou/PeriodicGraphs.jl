@@ -26,12 +26,14 @@ far from the reference.
 Several functions transform a periodic graph into another isomorphic to the input, by
 renumbering the vertices ([`vertex_permutation`](@ref PeriodicGraphs.vertex_permutation))
 or the axes ([`swap_axes!`](@ref)), or by offsetting the chosen representatives for each
-vertex ([`offset_representatives!`](@ref)).
+vertex ([`offset_representatives!`](@ref)). It is also possible to make an isomorphic graph
+with more vertices per unit cell by using a supercell ([`make_supercell`](@ref)).
 
 ```@docs
 PeriodicGraphs.vertex_permutation
 swap_axes!
 offset_representatives!
+make_supercell
 ```
 
 ## Dimension reduction

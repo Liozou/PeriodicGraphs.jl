@@ -158,6 +158,9 @@ end
     @test ne(gg) == nv(gg) == 0 && isempty(edges(gg))
     @test ne(g) == nv(g) == 0 && isempty(edges(g))
     @test g == gg
+    @test_throws DimensionMismatch make_supercell(g, (2, 1, 1, 1))
+    @test_throws DomainError make_supercell(g, (2, 0, 1))
+    @test g == make_supercell(g, (2, 1, 3))
     @test isempty(connected_components(g))
     @test edgetype(g) == PeriodicEdge3D
     @test eltype(g) == PeriodicVertex3D
@@ -437,6 +440,19 @@ end
     @test gcopy != gg == ggg
     @test collect(edges(gg)) == PeriodicEdge3D[(1, 2, (-1,1,0)), (2, 2, (0,1,0))]
     @test edges(gg) < edges(gcopy) # lexicographical ordering on the list of edges
+end
+
+@testset "Supercell" begin
+    function check_make_supercell(g, t)
+        x = make_supercell(g, t)
+        @test nv(x) == prod(t)*nv(g)
+        x
+    end
+    g = PeriodicGraph("3 1 1 1 0 0 1 2 0 0 0 1 3 0 0 1 1 3 0 1 -1 2 3 0 0 0 2 4 0 -1 0")
+    @test make_supercell(g, (1 for _ in 1:3)) == g
+    @test check_make_supercell(g, [3, 2, 4]) == check_make_supercell(check_make_supercell(check_make_supercell(g, [3, 1, 1]), [1, 2, 1]), [1, 1, 4])
+    g312 = check_make_supercell(g, SVector{3,Int}(3, 1, 2))
+    @test truncated_graph(g) == truncated_graph(g312[1:4]) == truncated_graph(g312[5:8]) == truncated_graph(g312[9:12])
 end
 
 const sqc7399 = PeriodicGraph3D("3 1 6 0 -1 -1 1 10 -1 -1 0 1 10 -1 0 0 2 5 0 0 0 2 7 -1 0 0 2 7 0 0 0 3 4 0 1 0 3 7 -1 1 0 3 7 0 0 -1 4 10 -1 0 1 4 10 0 -1 0 5 10 -1 0 0 5 10 0 0 0 6 7 0 0 0 6 7 0 1 0 7 7 0 0 1 7 7 0 1 0 7 7 1 -1 -1 7 7 1 0 0 7 8 0 0 0 7 8 0 0 1 7 10 -1 0 1 7 10 0 -1 0 7 10 0 0 0 7 10 0 0 1 8 9 0 -1 -1 9 10 0 0 0 9 10 0 0 1 10 10 0 0 1 10 10 0 1 0 10 10 1 -1 -1 10 10 1 0 0");

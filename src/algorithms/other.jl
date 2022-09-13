@@ -2,6 +2,7 @@
 
 export offset_representatives!,
        swap_axes!,
+       make_supercell,
        truncated_graph,
        quotient_graph,
        slice_graph
@@ -63,6 +64,64 @@ function swap_axes!(g::PeriodicGraph{N}, t) where N
     g
 end
 @noinline __throw_invalid_axesswap() = throw(DimensionMismatch("The number of axes must match the dimension of the graph"))
+
+struct MetaClock{T}
+    maxs::T
+    factors::Vector{Int}
+    len::Int
+end
+function MetaClock(t)
+    t isa AbstractVector || (t = collect(t))
+    factors = Vector{Int}(undef, length(t))
+    cumprod!(factors, t)
+    len = pop!(factors)
+    pushfirst!(factors, 1)
+    return MetaClock(t, factors, len)
+end
+Base.length(x::MetaClock) = x.len
+Base.eltype(::Type{MetaClock{T}}) where {T} = Vector{Int}
+function Base.iterate(x::MetaClock, state::Vector{Int}=[-1; zeros(Int, length(x.maxs)-1)])
+    maxs = x.maxs
+    for i in 1:length(maxs)
+        y = state[i] + 1
+        if y == maxs[i]
+            state[i] = 0
+        else
+            state[i] = y
+            return (state, state)
+        end
+    end
+    return nothing
+end
+
+"""
+    make_supercell(g::PeriodicGraph, t)
+
+Return a graph isomorphic to the input `g` whose its unit cell is a repetition of that of
+`g`, each dimension `i` being repeated `t[i]` times.
+It follows that the number of vertices of `make_supercell(g, t)` is `prod(t)*nv(g)`
+
+`t` must be an interator over positive integers.
+"""
+function make_supercell(g::PeriodicGraph{N}, t::S) where {N,S}
+    length(t) == N || __throw_invalid_axesswap()
+    N == 0 && return g
+    newedges = PeriodicEdge{N}[]
+    __check_nonpositive_axe(minimum(t))
+    n = nv(g)
+    clock = MetaClock(t)
+    for e in edges(g)
+        (src, (dst, ofs)) = e
+        for pos in clock
+            factor = n*sum(prod, zip(clock.factors, pos); init=0)
+            newofs, newpos = eachrow(reinterpret(reshape, Int, fldmod.(ofs .+ pos, t)))
+            newfactor = n*sum(prod, zip(clock.factors, newpos); init=0)
+            push!(newedges, PeriodicEdge{N}(factor+src, newfactor+dst, newofs))
+        end
+    end
+    return PeriodicGraph{N}(length(clock)*n, newedges)
+end
+__check_nonpositive_axe(i) = i > 0 || throw(DomainError(i, "All supercell dimensions must be strictly positive"))
 
 """
     truncated_graph(g::PeriodicGraph)

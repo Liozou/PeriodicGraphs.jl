@@ -176,8 +176,12 @@ function _precompile_()
         # Other utils
         @enforce Base.precompile(Tuple{typeof(offset_representatives!),PeriodicGraph{i},Vector{Int}})
         @enforce Base.precompile(Tuple{typeof(offset_representatives!),PeriodicGraph{i},Vector{NTuple{i,Int}}})
-        @enforce Base.precompile(Tuple{typeof(swap_axes!),PeriodicGraph{i},Vector{Int}})
         @enforce Base.precompile(Tuple{typeof(swap_axes!),PeriodicGraph{i},NTuple{i,Int}})
+        @enforce Base.precompile(Tuple{typeof(swap_axes!),PeriodicGraph{i},SVector{i,Int}})
+        @enforce Base.precompile(Tuple{typeof(swap_axes!),PeriodicGraph{i},Vector{Int}})
+        @enforce Base.precompile(Tuple{typeof(make_supercell),PeriodicGraph{i},NTuple{i,Int}})
+        @enforce Base.precompile(Tuple{typeof(make_supercell),PeriodicGraph{i},SVector{i,Int}})
+        @enforce Base.precompile(Tuple{typeof(make_supercell),PeriodicGraph{i},Vector{Int}})
         @enforce Base.precompile(Tuple{typeof(truncated_graph),PeriodicGraph{i}})
         @enforce Base.precompile(Tuple{typeof(quotient_graph),PeriodicGraph{i}})
         for N in 1:i
