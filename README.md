@@ -16,9 +16,6 @@ Various optimized algorithms are implemented as well, including:
 
 and more, see [the documentation](https://liozou.github.io/PeriodicGraphs.jl/).
 
-For convenience, aliases are exported for 1D, 2D and 3D (`N = 1`, `N = 2` and `N = 3`)
-under the names `PeriodicGraph1D`, `PeriodicEdge2D`, `PeriodicVertex3D`, etc.
-
 See also:
 
 - [PeriodicGraphEmbeddings.jl](https://github.com/Liozou/PeriodicGraphEmbeddings.jl)
