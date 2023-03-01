@@ -267,7 +267,7 @@ function vertex_permutation(g::PeriodicGraph{N}, vlist) where N
         end
         sort!(neighs)
     end
-    return PeriodicGraph{N}(Ref(g.ne[]), edges, startoffsets, Ref(g.width[]))
+    PeriodicGraph{N}(Ref(g.ne[]), edges, startoffsets, Ref(g.width[]))
 end
 
 function Graphs.induced_subgraph(g::PeriodicGraph{N}, vlist::AbstractVector{U}) where {N, U<:Integer}

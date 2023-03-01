@@ -137,6 +137,7 @@ they are independent of the input.
 function normal_basis(l::AbstractVector{<:StaticVector{N,T}}) where {N,T<:Integer}
     n = length(l)
     # coords = [MVector{N,T}(undef) for _ in 1:n]
+    n == 0 && return (MMatrix{N,N,T}(LinearAlgebra.I), 0)
     basis = zero(MMatrix{N,N,T}) # The artificial integer basis
     zerocol = Int[]
     @inbounds for j in 1:N
@@ -284,7 +285,7 @@ function PeriodicGraph{D}(graph::PeriodicGraph{N}, dims=_dimensionality(graph)) 
     @assert _d == d
     _invmat::Matrix{Rational{Int}} = inv(Rational.(basis))[1:d,:]
     maxden = maximum(denominator.(_invmat); dims=2)
-    invmat::Matrix{Int} = maximum(maxden) > 1 ? (maxden .* _invmat) : _invmat
+    invmat::Matrix{Int} = maximum(maxden; init=0) > 1 ? (maxden .* _invmat) : _invmat
     newedges = Vector{PeriodicEdge{D}}(undef, n)
     if d == D
         for (i, e) in enumerate(edges(graph))

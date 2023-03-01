@@ -2,7 +2,7 @@ using Test
 using PeriodicGraphs
 
 using Aqua
-Aqua.test_all(PeriodicGraphs; ambiguities=(; exclude=[sort!])) # TODO: fix upsrteam at Graphs.jl
+Aqua.test_all(PeriodicGraphs)
 
 using Graphs
 using PeriodicGraphs: vertex_permutation, LoopException, extended_gcd
@@ -730,6 +730,9 @@ end
     d, λ = extended_gcd(s)
     @test d == 1
     @test reduce(+, s .* λ) == d
+
+    g1 = PeriodicGraph("1  1 2 0  1 3 1  2 4 1  3 4 0")
+    @test PeriodicGraph{0}(g1) == PeriodicGraph{0}(map(x -> PeriodicEdge(x[1], x[2], ()), Tuple.(edges(quotient_graph(g1)))))
 end
 
 @testset "ConstMiniBitSet" begin
