@@ -8,6 +8,7 @@ end
 macro _precompile_g(N, str)
     g = gensym("graph")
     ret = quote
+        PeriodicGraph{$N}(4)
         $g = PeriodicGraph($str)
         $g == parse(PeriodicGraph, string($g))
         PeriodicGraph{$N}($str) == parse(PeriodicGraph{$N}, string($g))
@@ -40,10 +41,10 @@ macro _precompile_g(N, str)
         rings($g, 3)
         strong_rings($g, 3)
         strong_erings($g, 3)
-        RingAttributions($g, true, 3)[1][1]
-        RingAttributions($g, 3)[1][1]
-        RingAttributions($g, true)[1][1]
-        RingAttributions($g)[1][1]
+        collect(RingAttributions($g, true, 3)[1][1])
+        first(RingAttributions($g, 3)[1][1])
+        collect(RingAttributions($g, true)[1])
+        first(RingAttributions($g)[1])
     end
     if N != 0
         append!(ret.args, (quote
