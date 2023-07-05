@@ -1,7 +1,7 @@
 [deps]
 Documenter = "e30172f5-a6a5-5a46-863b-614d45cd2de4"
-Literate = "98b081ad-f1c9-55d3-8b20-4c87d4299306"
 Graphs = "86223c79-3864-5bf0-83f7-82e725a168b6"
+Literate = "98b081ad-f1c9-55d3-8b20-4c87d4299306"
 
 [compat]
 Documenter = "0.27"

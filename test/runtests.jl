@@ -679,37 +679,42 @@ end
     @test g2 == gref
 end
 
-function equivalent_dict(d1, d2)
+function check_dimensionality(g, d2)
+    d1 = dimensionality(g)
     keys(d1) == keys(d2) || return false
     for k in keys(d1)
-        s1 = Set(Set(x) for x in d1[k])
-        s2 = Set(Set(x) for x in d2[k])
+        s1 = Set((Set(l), m) for (l,m) in d1[k])
+        s2 = Set((Set(l), m) for (l,m) in d2[k])
         s1 == s2 || return false
     end
     return true
 end
 
 @testset "Dimensionality" begin
-    @test dimensionality(PeriodicGraph{0}(5)) == Dict(0 => [collect(1:5)])
+    @test dimensionality(PeriodicGraph{0}(5)) == Dict(0 => [(collect(1:5),1)])
     g::PeriodicGraph3D = PeriodicGraph3D([PeriodicEdge3D(1, 3, (0, 0, 1)),
                                           PeriodicEdge3D(2, 3, (0, 1, 0)),
-                                          PeriodicEdge3D(2, 3, (0, -1, 0)),
+                                          PeriodicEdge3D(2, 3, (0, 0, 0)),
                                           PeriodicEdge3D(4, 4, (1, 1, 0))])
-    @test equivalent_dict(dimensionality(g), Dict(1 => connected_components(g)))
-    @test add_edge!(g, PeriodicEdge(3, 2, (0,0,0)))
-    @test equivalent_dict(dimensionality(g), Dict(1 => connected_components(g)))
+    @test check_dimensionality(g, Dict(1 => [(x,1) for x in connected_components(g)]))
+    @test add_edge!(g, PeriodicEdge(2, 3, (0,-1,0)))
+    @test check_dimensionality(g, Dict(1 => [(x,1) for x in connected_components(g)]))
     @test add_edge!(g, PeriodicEdge(2, 2, (0,0,1)))
-    @test equivalent_dict(dimensionality(g), Dict(1 => [[4]], 2 => [[1,2,3]]))
+    @test check_dimensionality(g, Dict(1 => [([4],1)], 2 => [([1,2,3],1)]))
     @test rem_edge!(g, PeriodicEdge(1, 3, (0,0,1)))
-    @test equivalent_dict(dimensionality(g), Dict(0 => [[1]], 1 => [[4]], 2 => [[2,3]]))
+    @test check_dimensionality(g, Dict(0 => [([1],1)], 1 => [([4],1)], 2 => [([2,3],1)]))
     @test rem_edge!(g, 3, PeriodicVertex(2, (0,0,0)))
-    @test equivalent_dict(dimensionality(g), Dict(0 => [[1]], 1 => [[4]], 2 => [[2,3]]))
+    @test check_dimensionality(g, Dict(0 => [([1],1)], 1 => [([4],1)], 2 => [([2,3],2)]))
     @test rem_edge!(g, PeriodicEdge(2, 3, (0,1,0)))
-    @test equivalent_dict(dimensionality(g), Dict(0 => [[1]], 1 => [[2,3],[4]]))
+    @test check_dimensionality(g, Dict(0 => [([1],1)], 1 => [([2,3],1),([4],1)]))
     @test add_edge!(g, 2, PeriodicVertex3D(3, (1,0,-1)))
-    @test equivalent_dict(dimensionality(g), Dict(0 => [[1]], 1 => [[4]], 2 => [[2,3]]))
+    @test check_dimensionality(g, Dict(0 => [([1],1)], 1 => [([4],1)], 2 => [([2,3],1)]))
     @test add_edge!(g, 2, PeriodicVertex(3, (2,0,-1)))
-    @test equivalent_dict(dimensionality(g), Dict(0 => [[1]], 1 => [[4]], 3 => [[2,3]]))
+    @test check_dimensionality(g, Dict(0 => [([1],1)], 1 => [([4],1)], 3 => [([2,3],1)]))
+
+    @test check_dimensionality(PeriodicGraph("2  1 1 2 0  1 1 0 1"), Dict(2 => [([1],2)]))
+    @test check_dimensionality(PeriodicGraph("3  1 1 2 0 0  1 1 0 2 0"), Dict(2 => [([1],4)]))
+    @test check_dimensionality(PeriodicGraph("3  1 1 0 0 1  1 2 -1 0 0  1 2 0 -1 0  1 2 1 0 0"), Dict(3 => [([1,2],2)]))
 end
 
 @testset "Dimension change" begin
@@ -719,7 +724,7 @@ end
             3 4 -1 0 0
             4 1 0 0 1
             4 4 0 0 1")
-    @test equivalent_dict(dimensionality(g), Dict(1 => [[1,2,3,4]]))
+    @test check_dimensionality(g, Dict(1 => [(1:4,1)]))
     gg = PeriodicGraph1D(g)
     @test string(gg) == "1 1 2 0 1 4 -1 2 3 0 3 4 0 4 4 1"
     @test PeriodicGraph2D(gg) == PeriodicGraph2D(g) ==
