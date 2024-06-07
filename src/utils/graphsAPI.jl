@@ -11,7 +11,7 @@ Graphs.edges(g::PeriodicGraph{N}) where {N} = PeriodicEdgeIter{N}(g)
 # Note: the following is intentionally not eltype(::Type{PeriodicGraph{N}}) where N
 eltype(::PeriodicGraph{N}) where {N} = PeriodicVertex{N}
 Graphs.edgetype(::PeriodicGraph{N}) where {N} = PeriodicEdge{N}
-function Graphs.has_edge(g::PeriodicGraph, s, d)
+function Graphs.has_edge(g::PeriodicGraph, s::Integer, d::Integer)
     ((s < 1) | (s > nv(g))) && return false
     #=@inbounds=# begin
         start = g.directedgestart[s]
@@ -49,14 +49,17 @@ function Graphs.has_edge(g::PeriodicGraph, e::PeriodicEdge)
         return i <= length(g.nlist[s]) && g.nlist[s][i] == d
     end
 end
-Graphs.has_edge(g::PeriodicGraph, i, x::PeriodicVertex) = has_edge(g, PeriodicEdge(i, x))
+Graphs.has_edge(g::PeriodicGraph, i::Integer, x::PeriodicVertex) = has_edge(g, PeriodicEdge(i, x))
+Graphs.has_edge(g::PeriodicGraph, x::PeriodicVertex, i::Integer) = has_edge(g, i, x)
+function Graphs.has_edge(g::PeriodicGraph, src::PeriodicVertex, dst::PeriodicVertex)
+    w = PeriodicEdge(src.v, PeriodicVertex(dst.v, dst.ofs .- src.ofs))
+    has_edge(g, w)
+end
 Graphs.outneighbors(g::PeriodicGraph, v::Integer) = g.nlist[v]
 Graphs.inneighbors(g::PeriodicGraph, v::Integer) = outneighbors(g, v)
 zero(::Type{PeriodicGraph{N}}) where N = PeriodicGraph{N}(0)
 Graphs.is_directed(::Type{<:PeriodicGraph}) = false
-@static if isdefined(Graphs, :has_contiguous_vertices)
-    @inline Graphs.has_contiguous_vertices(::Type{<:PeriodicGraph}) = true
-end
+Graphs.is_directed(::PeriodicGraph) = false
 Graphs.has_vertex(g::PeriodicGraph, v::Integer) = 1 <= v <= nv(g)
 function Graphs.SimpleGraphs.add_vertices!(g::PeriodicGraph{N}, n::Integer) where N
     append!(g.nlist, [PeriodicVertex{N}[] for _ in 1:n])
