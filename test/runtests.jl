@@ -799,13 +799,13 @@ end
     notindependent, info = PeriodicGraphs.gaussian_elimination(gausstrack, [1, 4, 5, 7])
     @test notindependent
     @test PeriodicGraphs.gaussian_elimination!(gausstrack, [1, 4, 5, 7], notindependent, info)
-    @test PeriodicGraphs.retrieve_track!(gausstrack) == Int32[5, 4, 1]
+    @test PeriodicGraphs.retrieve_track!(gausstrack) == Int32[4, 1]
     @test !PeriodicGraphs.gaussian_elimination!(gausstrack, [3, 5, 6, 7])
     @test !PeriodicGraphs.gaussian_elimination!(gausstrack, [2, 3])
     @test !first(PeriodicGraphs.gaussian_elimination(gausstrack, [1, 2, 3]))
     @test !PeriodicGraphs.gaussian_elimination!(gausstrack, [1, 2, 3])
     @test PeriodicGraphs.gaussian_elimination!(gausstrack, [1, 2, 3])
-    @test PeriodicGraphs.retrieve_track!(gausstrack) == Int32[9, 8]
+    @test PeriodicGraphs.retrieve_track!(gausstrack) == Int32[8]
     @test gausstrack.shortcuts == Int32[4, 7, 1, 2, 6, 3, 8]
     @test length(gausstrack.rings) == 9
 

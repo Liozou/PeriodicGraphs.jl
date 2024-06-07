@@ -1325,7 +1325,6 @@ function retrieve_track!(ret::Vector{Int32}, buffer::Vector{Int32}, gauss::Itera
     track = sort!(first(gauss.track))
     tracks = last(gauss.track)
     empty!(ret)
-    push!(ret, length(gauss.rings))
     while !isempty(track)
         x = pop!(track)
         push!(ret, x)
