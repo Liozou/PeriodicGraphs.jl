@@ -15,6 +15,13 @@ The connected components of `g` can be separated and sorted by dimensionality us
 dimensionality
 ```
 
+See also [`split_catenation`](@ref) to split connected components in a more detailed
+fashion, when multiple components can share the same vertex indices:
+
+```@docs
+split_catenation
+```
+
 To transpose a graph from one dimension `N` to another `D`, call the type constructor
 [`PeriodicGraph{D}`](@ref PeriodicGraph{D}(graph::PeriodicGraph{N}) where {D,N}) directly
 on `g::PeriodicGraph{N}`.

@@ -2,7 +2,7 @@ import Base.GMP.MPZ
 import LinearAlgebra: det
 using StaticArrays
 
-export dimensionality
+export dimensionality, split_catenation
 
 # Algorithm 3 from George Havas, Bohdan S. Majewski, and Keith R. Matthews,
 # "Extended GCD and Hermite Normal Form Algorithms via Lattice Basis Reduction"
@@ -241,7 +241,7 @@ Return a dictionary where each entry `n => [(l1,m1), (l2,m2), ...]` means that
 component is present `mi` times per unit cell.
 
 In other words, the connected component `li` has a periodicity that can only be expressed
-in a unit cell `mi` times larger than the current one.
+in a unit cell `mi` times larger than the current one. See also [`split_catenation`](@ref).
 
 ## Examples
 ```jldoctest
@@ -322,4 +322,122 @@ function PeriodicGraph{D}(graph::PeriodicGraph{N}, dims=_dimensionality(graph)) 
         end
     end
     return PeriodicGraph{D}(nv(graph), newedges)
+end
+
+
+function _explore_one_component!(expected, encountered, visited, graph::PeriodicGraph{N}, start) where N
+    nullofs = zero(SVector{N,Int})
+    recordedperiodicities = Set{SVector{N,Int}}()
+    component = Dict{Int,Tuple{Int,SVector{N,Int}}}(start.v => (1, start.ofs))
+    seen = Set{PeriodicVertex{N}}([start])
+    newedges = PeriodicEdge{N}[]
+    Q = PeriodicVertex{N}[start]
+    for (j, src) in enumerate(Q)
+        for dst in outneighbors(graph, src)
+            newvertex = length(component) + 1
+            k, lastperiodicity = get!(component, dst.v, (newvertex, dst.ofs))
+            thisperiodicity = dst.ofs .- lastperiodicity
+            push!(newedges, PeriodicEdge(j, k, thisperiodicity))
+            dst ∈ seen && continue
+            push!(seen, dst)
+            visited[dst.v] = true
+            c = cmp(thisperiodicity, nullofs)
+            if iszero(c) # First time we encounter dst.v
+                @assert k == newvertex
+                push!(Q, dst)
+            elseif c > 0
+                push!(recordedperiodicities, thisperiodicity)
+            end
+        end
+    end
+    vec::Vector{SVector{N,Int}} = collect(recordedperiodicities)
+    catenationmat, d = normal_basis(vec)
+    invmcatenationmat = inv(SMatrix{N,N,Rational{Int},N*N}(catenationmat))
+    for (j, (src, (dst, ofs))) in enumerate(newedges)
+        newedges[j] = PeriodicEdge{N}(src, dst, Int.(invmcatenationmat*ofs))
+    end
+
+    idx = minimum(keys(component))
+    if expected[idx] == 0
+        expected[idx] = Int(det(catenationmat))
+        encountered[idx] = ([(PeriodicGraph{N}(newedges), Q)], catenationmat, d)
+    else
+        sublist, oldcatenationmat, oldd = encountered[idx]
+        @assert oldd == d && oldcatenationmat == catenationmat
+        push!(sublist, (PeriodicGraph{N}(newedges), Q))
+    end
+    idx
+end
+
+"""
+    split_catenation(graph::PeriodicGraph{N}) where N
+
+Return a list of tuples `(sublist, mat, dim)`.
+Each `sublist` is made of a list of pairs `(subgraph, vmap)` where `subgraph` is a
+connected component of the input `graph`, whose vertices are given by `vmap` from `graph`.
+`dim` is the [`dimensionality`](@ref) of these connected components, and `mat` is the
+transformation matrix between the input cell and the component's cell.
+
+Each sublist contains connected components that share the same vertex indices.
+
+## Example
+```jldoctest
+julia> g = PeriodicGraph("2    1 1  3 0   1 1  0 1   2 3  1 0   3 2  1 0");
+
+julia> dimensionality(g)
+Dict{Int64, Vector{Tuple{Vector{Int64}, Int64}}} with 2 entries:
+  2 => [([1], 3)]
+  1 => [([2, 3], 2)]
+
+julia> splits = split_catenation(g);
+
+julia> last.(splits) # One 2-dimensional catenation (vertex 1), one 1-dimensional (vertices 2 and 3)
+2-element Vector{Int64}:
+ 2
+ 1
+
+julia> sublist, mat, dim = last(splits); # the 1-dimensional connected components
+
+julia> sublist # first sublist takes vertex 2 from the reference unit cell, second one takes vertex 3.
+2-element Vector{Tuple{PeriodicGraph2D, Vector{PeriodicVertex2D}}}:
+ (PeriodicGraph2D(2, PeriodicEdge2D[(1, 2, (0,0)), (1, 2, (1,0))]), [(2, (0,0)), (3, (-1,0))])
+ (PeriodicGraph2D(2, PeriodicEdge2D[(1, 2, (0,0)), (1, 2, (1,0))]), [(3, (0,0)), (2, (-1,0))])
+```
+"""
+function split_catenation(graph::PeriodicGraph{N}) where N
+    n = nv(graph)
+    visited = falses(n)
+    expected = zeros(Int, n)
+    encountered = Vector{Tuple{Vector{Tuple{PeriodicGraph{N}, Vector{PeriodicVertex{N}}}}, SMatrix{N,N,Int,N*N}, Int}}(undef, n)
+
+    for i in 1:n
+        visited[i] && continue
+        visited[i] = true
+        _explore_one_component!(expected, encountered, visited, graph, PeriodicVertex{N}(i))
+    end
+
+    keep = Int[]
+    for (idx, ex) in enumerate(expected)
+        ex == 0 && continue
+        push!(keep, idx)
+        sublist, mat, _ = encountered[idx]
+        if length(sublist) < ex
+            invmat = inv(SMatrix{N,N,Rational{Int},N*N}(mat))
+            for h in 1:1000
+                x = reverse_hash_position(h, Val{N}())
+                attempt_x = true
+                for (_, vmap) in sublist
+                    ofs = vmap[findfirst(x -> x.v == idx, vmap)].ofs
+                    if all(isinteger, invmat * (x .- ofs))
+                        attempt_x = false
+                        break
+                    end
+                end
+                attempt_x || continue
+                _explore_one_component!(expected, encountered, visited, graph, PeriodicVertex{N}(idx, x))
+            end
+        end
+        length(sublist) < ex && error("Could not complete the splitting of connected components")
+    end
+    encountered[keep]
 end

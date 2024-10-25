@@ -214,7 +214,24 @@ function Graphs.SimpleGraphs.rem_vertex!(g::PeriodicGraph, v::Integer)
     return length(rem_vertices!(g, [v])) == n - 1
 end
 
+"""
+    connected_components(g::PeriodicGraph)
 
+Return the connected components of a periodic graph `g` as lists of vertex indices.
+
+!!! note
+    Even when two vertex indices `a` and `b` are in the same connected component, this does
+    not necessarily imply that the two corresponding vertices in given unit cells are.
+
+    For example, in graph `PeriodicGraph("1  1 2 1  2 1 1")`, there are vertices of index 1
+    and 2 which are connected, so the only connected component is given as `[1, 2]`.
+    However, `PeriodicVertex(1, (0,))` and `PeriodicVertex(2, (0,))` do not belong to the
+    same connected component, as there is no path from one to the other. Similarly,
+    `PeriodicVertex(1, (0,))` and `PeriodicVertex(1, (1,))` do not belong to the same
+    connected component either.
+
+See also [`dimensionality`](@ref) and [`split_catenation`](@ref).
+"""
 function Graphs.connected_components(g::PeriodicGraph)
     nvg = nv(g)
     label = zeros(Int, nvg)
