@@ -725,6 +725,7 @@ function rings_around(g::PeriodicGraph{D}, i, depth=15, dist::DistanceRecord=Dis
             newcycle, _ = normalize_cycle!(hashes[cycle], n, Val(D))
             push!(ret, newcycle)
         end
+        yield()
     end
     return ret
 end
@@ -874,20 +875,22 @@ function rings(g::PeriodicGraph{D}, depth::Integer=15, symmetries::AbstractSymme
     sort!(ret; by=length, rev=true) # to avoid resizing the buffer below too many times
     buffer = similar(first(ret))
     n = nv(g)
-    uniquerings = [[reverse_hash_position(x, g) for x in r] for r in ret]
     ringdict = Dict{Vector{Int},Int}()
     symmuniques = Int[]
     toremove = Int[]
-    for (idx, ring) in enumerate(uniquerings)
-        nr = length(ring)
+    N = length(ret)
+    for idx in 1:N
+        hring = ret[idx]
+        nr = length(hring)
         resize!(buffer, nr)
         corrected_idx = idx - length(toremove)
-        newidx = get!(ringdict, ret[idx], corrected_idx)
+        newidx = get!(ringdict, hring, corrected_idx)
         if newidx == corrected_idx
             push!(symmuniques, corrected_idx)
         else
             push!(toremove, idx)
         end
+        ring = [reverse_hash_position(x, g) for x in hring]
         for symm in symmetries
             #=@inbounds=# for i in 1:nr
                 buffer[i] = hash_position(symm[ring[i]], n)
@@ -899,6 +902,7 @@ function rings(g::PeriodicGraph{D}, depth::Integer=15, symmetries::AbstractSymme
                 ringdict[cp] = newidx
             end
         end
+        yield()
     end
     deleteat!(ret, toremove)
     return ret, RingSymmetryGroup{D}(ringdict, symmuniques, n, symmetries)
@@ -952,7 +956,7 @@ struct EdgeDict{D}
     function EdgeDict(g::PeriodicGraph{D}) where D
         known_pairs = VertexPair{D}[]
         known_pairs_dict = Dict{VertexPair{D},Int}()
-        hintsize = 3^D*ne(g)^2
+        hintsize = (3^D*ne(g)^2) ÷ 5
         sizehint!(known_pairs, hintsize)
         sizehint!(known_pairs_dict, hintsize)
         return new{D}(known_pairs, known_pairs_dict)
