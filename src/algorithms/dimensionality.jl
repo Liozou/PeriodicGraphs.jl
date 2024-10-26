@@ -246,12 +246,12 @@ in a unit cell `mi` times larger than the current one. See also [`split_catenati
 ## Examples
 ```jldoctest
 julia> dimensionality(PeriodicGraph("2   1 1  1 0   2 2  -1 1   3 3  1 0   3 3  0 1"))
-Dict{Int64, Vector{Tuple{Vector{Int64}, Int64}}} with 2 entries:
+Dict{$Int, Vector{Tuple{Vector{$Int}, $Int}}} with 2 entries:
   2 => [([3], 1)]
   1 => [([1], 1), ([2], 1)]
 
 julia> dimensionality(PeriodicGraph("1   1 1  2"))
-Dict{Int64, Vector{Tuple{Vector{Int64}, Int64}}} with 1 entry:
+Dict{$Int, Vector{Tuple{Vector{$Int}, $Int}}} with 1 entry:
   1 => [([1], 2)]
 ```
 """
@@ -358,23 +358,21 @@ function _explore_one_component!(expected, encountered, visited, graph::Periodic
     end
 
     idx = minimum(keys(component))
-    if expected[idx] == 0
-        expected[idx] = Int(det(catenationmat))
-        encountered[idx] = ([(PeriodicGraph{N}(newedges), Q)], catenationmat, d)
-    else
-        sublist, oldcatenationmat, oldd = encountered[idx]
-        @assert oldd == d && oldcatenationmat == catenationmat
-        push!(sublist, (PeriodicGraph{N}(newedges), Q))
-    end
+    @assert expected[idx] == 0
+    expected[idx] = Int(det(catenationmat))
+    encountered[idx] = (PeriodicGraph{N}(newedges), [OffsetVertexIterator(nullofs, Q)], catenationmat, d)
     idx
 end
 
 """
     split_catenation(graph::PeriodicGraph{N}) where N
 
-Return a list of tuples `(sublist, mat, dim)`.
-Each `sublist` is made of a list of pairs `(subgraph, vmap)` where `subgraph` is a
-connected component of the input `graph`, whose vertices are given by `vmap` from `graph`.
+Return a list of tuples `(subgraph, vmaps, mat, dim)` where `subgraph` is a
+connected component of the input `graph`.
+Each sublist `vmap` in `vmaps` is a distinct mapping of the vertices of the graph into
+those of the corresponding `subgraph`. The union of all the vertices in all the `vmaps`,
+repeated with the according periodicity, exactly covers all the vertices of the input
+graph, without repetition.
 `dim` is the [`dimensionality`](@ref) of these connected components, and `mat` is the
 transformation matrix between the input cell and the component's cell.
 
@@ -385,30 +383,38 @@ Each sublist contains connected components that share the same vertex indices.
 julia> g = PeriodicGraph("2    1 1  3 0   1 1  0 1   2 3  1 0   3 2  1 0");
 
 julia> dimensionality(g)
-Dict{Int64, Vector{Tuple{Vector{Int64}, Int64}}} with 2 entries:
+Dict{$Int, Vector{Tuple{Vector{$Int}, $Int}}} with 2 entries:
   2 => [([1], 3)]
   1 => [([2, 3], 2)]
 
 julia> splits = split_catenation(g);
 
 julia> last.(splits) # One 2-dimensional catenation (vertex 1), one 1-dimensional (vertices 2 and 3)
-2-element Vector{Int64}:
+2-element Vector{$Int}:
  2
  1
 
-julia> sublist, mat, dim = last(splits); # the 1-dimensional connected components
+julia> subgraph, vmaps, mat, dim = last(splits);  # the 1-dimensional connected components
 
-julia> sublist # first sublist takes vertex 2 from the reference unit cell, second one takes vertex 3.
-2-element Vector{Tuple{PeriodicGraph2D, Vector{PeriodicVertex2D}}}:
- (PeriodicGraph2D(2, PeriodicEdge2D[(1, 2, (0,0)), (1, 2, (1,0))]), [(2, (0,0)), (3, (-1,0))])
- (PeriodicGraph2D(2, PeriodicEdge2D[(1, 2, (0,0)), (1, 2, (1,0))]), [(3, (0,0)), (2, (-1,0))])
+julia> vmaps  # first sublist takes vertex 2 from the reference unit cell, second one takes vertex 3.
+2-element Vector{PeriodicGraphs.OffsetVertexIterator{2}}:
+ [(2, (0,0)), (3, (-1,0))]
+ [(2, (1,0)), (3, (0,0))]
+
+julia> subgraph  # the subgraph consists in only the two relevant two vertices
+PeriodicGraph2D(2, PeriodicEdge2D[(1, 2, (0,0)), (1, 2, (1,0))])
+
+julia> mat  # the new cell is twice as large as the initial one
+2×2 SMatrix{2, 2, $Int, 4} with indices SOneTo(2)×SOneTo(2):
+ 2  0
+ 0  1
 ```
 """
 function split_catenation(graph::PeriodicGraph{N}) where N
     n = nv(graph)
     visited = falses(n)
     expected = zeros(Int, n)
-    encountered = Vector{Tuple{Vector{Tuple{PeriodicGraph{N}, Vector{PeriodicVertex{N}}}}, SMatrix{N,N,Int,N*N}, Int}}(undef, n)
+    encountered = Vector{Tuple{PeriodicGraph{N}, Vector{OffsetVertexIterator{N}}, SMatrix{N,N,Int,N*N}, Int}}(undef, n)
 
     for i in 1:n
         visited[i] && continue
@@ -420,24 +426,40 @@ function split_catenation(graph::PeriodicGraph{N}) where N
     for (idx, ex) in enumerate(expected)
         ex == 0 && continue
         push!(keep, idx)
-        sublist, mat, _ = encountered[idx]
-        if length(sublist) < ex
+        _, vmaps, mat, _ = encountered[idx]
+        if length(vmaps) < ex
+            refmap = first(vmaps).nlist
             invmat = inv(SMatrix{N,N,Rational{Int},N*N}(mat))
+            dumb_indices = findall(i -> begin onei = zeros(Int, N); onei[i] = 1; mat * onei == onei end, 1:N)
             for h in 1:1000
                 x = reverse_hash_position(h, Val{N}())
+                all(i -> iszero(x[i]), dumb_indices) || continue
                 attempt_x = true
-                for (_, vmap) in sublist
-                    ofs = vmap[findfirst(x -> x.v == idx, vmap)].ofs
+                for ofsvmap in vmaps
+                    ofs = ofsvmap.ofs
                     if all(isinteger, invmat * (x .- ofs))
                         attempt_x = false
                         break
                     end
                 end
                 attempt_x || continue
-                _explore_one_component!(expected, encountered, visited, graph, PeriodicVertex{N}(idx, x))
+                newvmap = OffsetVertexIterator(x, refmap)
+                # attempt to make it so that one of the vertices is in the reference cell if possible
+                if all(x -> !iszero(x.ofs), newvmap)
+                    for h2 in 0:100
+                        x2 = reverse_hash_position(h2, Val{N}())
+                        altx = -x - mat * x2
+                        if any(t -> t.ofs == altx, refmap)
+                            newvmap = OffsetVertexIterator(-altx, refmap)
+                            break
+                        end
+                    end
+                end
+                push!(vmaps, newvmap)
+                length(vmaps) == ex && break
             end
         end
-        length(sublist) < ex && error("Could not complete the splitting of connected components")
+        length(vmaps) < ex && error("Could not complete the splitting of connected components")
     end
     encountered[keep]
 end
