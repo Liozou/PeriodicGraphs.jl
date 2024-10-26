@@ -6,7 +6,7 @@ Aqua.test_all(PeriodicGraphs)
 
 using Graphs
 using PeriodicGraphs: vertex_permutation, LoopException, extended_gcd
-using StaticArrays: SVector, SMatrix
+using StaticArrays: SVector, SMatrix, SA
 using Combinatorics
 
 function naive_periodicgraph(nv::Integer, t::AbstractVector{PeriodicEdge{N}}) where N
@@ -715,6 +715,37 @@ end
     @test check_dimensionality(PeriodicGraph("2  1 1 2 0  1 1 0 1"), Dict(2 => [([1],2)]))
     @test check_dimensionality(PeriodicGraph("3  1 1 2 0 0  1 1 0 2 0"), Dict(2 => [([1],4)]))
     @test check_dimensionality(PeriodicGraph("3  1 1 0 0 1  1 2 -1 0 0  1 2 0 -1 0  1 2 1 0 0"), Dict(3 => [([1,2],2)]))
+
+    u2A = PeriodicGraph("2 1 2 0 0 1 4 -1 0 1 4 0 -1 2 3 -1 -1 2 3 0 0 3 4 0 0")
+    splits = split_catenation(u2A)
+    @test length(splits) == 1
+    subgraph, vmaps, mat, dim = splits[1]
+    @test isone(mat)
+    @test dim == 2
+    @test length(vmaps) == 1
+    vertex_permutation = first.(first(vmaps))
+    vertex_offsets = last.(first(vmaps))
+    @test length(vertex_permutation) == nv(subgraph) == nv(u2A)
+    # the following relation only holds because isone(mat), otherwise the edge offsets need to be adjusted
+    @test subgraph == offset_representatives!(u2A[vertex_permutation], vertex_offsets)
+
+    u2B = PeriodicGraph("2 1 4 -1 0 1 4 0 0 1 5 0 -1 2 3 -1 0 2 3 0 0 2 6 0 -1 3 5 -1 1 3 5 0 1 4 6 -1 1 4 6 0 1")
+    splits = split_catenation(u2B)
+    @test length(splits) == 1
+    subgraph, vmaps, mat, dim = splits[1]
+    @test length(vmaps) == 4
+    @test allunique(vmaps)
+
+    u2C = PeriodicGraph("2 1 3 -1 0 1 4 -1 1 1 4 0 -1 2 3 -1 1 2 3 0 -1 2 4 -1 0")
+    splits = split_catenation(u2C)
+    @test length(splits) == 1
+    subgraph, vmaps, mat, dim = splits[1]
+    @test dim == 2
+    @test mat == SA[1 0; 0 2]
+    @test subgraph == PeriodicGraph("2   1 2 0 0  1 3 0 0  1 3 1 -1  2 4 0 0  2 4 1 -1  3 4 1 0")
+    @test length(vmaps) == 2
+    @test vmaps[1] == PeriodicVertex2D[(1, (0,0)), (3, (-1,0)), (4, (-1,1)), (2, (-1,1))]
+    @test vmaps[2] == PeriodicVertex2D[(1, (1,-1)), (3, (0,-1)), (4, (0,0)), (2, (0,0))]
 end
 
 @testset "Dimension change" begin
