@@ -360,7 +360,7 @@ function _explore_one_component!(expected, encountered, visited, graph::Periodic
     idx = minimum(keys(component))
     @assert expected[idx] == 0
     expected[idx] = Int(det(catenationmat))
-    encountered[idx] = (PeriodicGraph{N}(newedges), [OffsetVertexIterator(nullofs, Q)], catenationmat, d)
+    encountered[idx] = (PeriodicGraph{N}(length(Q), newedges), [OffsetVertexIterator(nullofs, Q)], catenationmat, d)
     idx
 end
 
