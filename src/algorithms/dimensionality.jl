@@ -307,7 +307,7 @@ function PeriodicGraph{D}(graph::PeriodicGraph{N}, dims=_dimensionality(graph)) 
     basis, _d = normal_basis(l)
     @assert _d == d
     _invmat::Matrix{Rational{Int}} = inv(Rational.(basis))[1:d,:]
-    maxden = maximum(denominator.(_invmat); dims=2)
+    maxden = maximum(denominator.(_invmat); dims=2, init=0)
     invmat::Matrix{Int} = maximum(maxden; init=0) > 1 ? (maxden .* _invmat) : _invmat
     newedges = Vector{PeriodicEdge{D}}(undef, n)
     if d == D
