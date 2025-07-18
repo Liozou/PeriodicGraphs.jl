@@ -229,7 +229,7 @@ function arcs_list(g::PeriodicGraph{D}, i, depth::T, ringavoid=nothing, cycleavo
     _depth = depth % SmallIntType
     for parents in Iterators.rest(dag, 2)
         counter += 1
-        if hasavoid 
+        if hasavoid
             if counter == next_stop
                 parents.num ≥ _depth && break
                 next_stop = length(dag) + 1
@@ -913,27 +913,40 @@ end
 
 # cycles(g::PeriodicGraph, depth=15, symmetries=NoSymmetryGroup(g)) = rings(g, depth, symmetries, nothing)
 
-function cages_around(::PeriodicGraph{D}, depth) where D
-    buffer = MVector{D,Int}(undef)
-    buffer[end] = -depth - 1
-    top = ~zero(UInt64) >> ((65 - D) % UInt8)
-    num = (2*depth+1)^D
-    ret = Vector{SVector{D,Int}}(undef, num)
+clock_between(::NTuple{2,SVector{0}}) = [SVector{0,Int}()]
+function clock_between((mins, maxs)::NTuple{2,SVector{D}}) where D
     D > 64 && return ret # that's actually an error
+    mins == maxs && return [mins]
+    buffer = MVector{D,Int}(undef)
+    lengths = maxs .- mins .+ 1
+    num = prod(lengths)
+    mask = zero(UInt64)
+    nextups = zero(MVector{D,Int})
+    for i in D:-1:1
+        if maxs[i] != mins[i]
+            nextups[i] = i
+        else
+            mask |= one(UInt64) << ((i-1) % UInt8)
+            nextups[i] = i == D ? 0 : nextups[i+1]
+            buffer[i] = mins[i]
+        end
+    end
+    imax = maximum(nextups)
+    buffer[imax] = mins[imax] - 1
+    top = (~zero(UInt64) >> ((65 - imax) % UInt8)) | mask
+    ret = Vector{SVector{D,Int}}(undef, num)
     for i in 1:num
         fst = trailing_ones(top)
-        top &= ~zero(UInt64) << (fst % UInt8)
-        for i in 1:fst
-            buffer[i] = -depth
-        end
-        if (buffer[fst+1] += 1) == depth
-            top |= one(UInt64) << (fst % UInt8)
+        top &= (~zero(UInt64) << (fst % UInt8)) | mask
+        buffer[1:fst] .= mins[1:fst]
+        nextup = nextups[fst+1]
+        if (buffer[nextup] += 1) == maxs[nextup]
+            top |= one(UInt64) << ((nextup-1) % UInt8)
         end
         ret[i] = buffer
     end
     return ret
 end
-cages_around(::PeriodicGraph{0}, _) = [SVector{0,Int}()]
 
 const VertexPair{D} = Tuple{PeriodicVertex{D},PeriodicVertex{D}}
 
@@ -1034,6 +1047,28 @@ function convert_to_ering(ring::Vector{PeriodicVertex{D}}, kp::EdgeDict{D}, ofs=
     return convert_to_ering!(Int[], ring, kp, ofs, len)
 end
 
+# compute the minimum and maximum indices of each vertex in the ring list rs
+function extreme_offsets(rs, g::PeriodicGraph{D}) where D
+    mins = zero(MVector{D,Int})
+    maxs = zero(MVector{D,Int})
+    for ring in rs, x in ring
+        ofs = reverse_hash_position(x, g).ofs
+        mins .= min.(mins, ofs)
+        maxs .= max.(maxs, ofs)
+    end
+    SVector{D,Int}(mins), SVector{D,Int}(maxs)
+end
+
+function zero_ofs_of((mins, maxs)::NTuple{2,SVector{D}}) where D
+    D == 0 && return 1
+    ret = 1 - mins[1]
+    acc = 1
+    for i in 2:D
+        acc *= (1 + maxs[i-1] - mins[i-1])
+        ret -= acc*mins[i]
+    end
+    return ret
+end
 
 """
     sort_cycles(g::PeriodicGraph{D}, rs, depth=maximum(length, rs), kp=EdgeDict(g)) where D
@@ -1047,12 +1082,14 @@ An edge-ring is a `Vector{Int}` where each element is the index of a pair of
 Two consecutive edges in an edge-ring must share exactly one of their two vertices.
 """
 function sort_cycles(g::PeriodicGraph{D}, rs, depth=maximum(length, rs; init=0), kp=EdgeDict(g)) where D
-    ofss = cages_around(g, 2)
+    minmaxs = extreme_offsets(rs, g)
+    ofss = clock_between(minmaxs)
     tot_ofss = length(ofss)
     cycles = Vector{Vector{Int}}(undef, tot_ofss * length(rs))
     origin = zeros(Int, length(cycles))
     ringbuffer = Vector{PeriodicVertex{D}}(undef, 2*depth+3)
-    zero_ofs = (tot_ofss+1) ÷ 2
+    zero_ofs = zero_ofs_of(minmaxs)
+    @assert iszero(ofss[zero_ofs])
     for (i, ring) in enumerate(rs)
         base = (i-1)*tot_ofss
         @simd for k in 1:length(ring)
