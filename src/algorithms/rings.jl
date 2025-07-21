@@ -1056,7 +1056,7 @@ function extreme_offsets(rs, g::PeriodicGraph{D}) where D
         mins .= min.(mins, ofs)
         maxs .= max.(maxs, ofs)
     end
-    SVector{D,Int}(mins), SVector{D,Int}(maxs)
+    SVector{D,Int}(mins) .- 1, SVector{D,Int}(maxs) .+ 1
 end
 
 function zero_ofs_of((mins, maxs)::NTuple{2,SVector{D}}) where D
