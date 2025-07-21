@@ -1062,6 +1062,7 @@ function sort_cycles(g::PeriodicGraph{D}, rs, depth=maximum(length, rs; init=0),
         for (i_ofs, ofs) in enumerate(ofss)
             cycles[base+i_ofs] = convert_to_ering(ringbuffer, kp, ofs, length(ring))
         end
+        yield()
     end
     I = unique_order(cycles)
     return cycles[I], origin[I]
@@ -1551,6 +1552,7 @@ function strong_erings(rs::Vector{Vector{Int}}, g::PeriodicGraph{D}, depth=15, r
                 end
             end
         end
+        yield()
     end
     keepat!(origin, ret)
     keepat!(ecycles, ret)
