@@ -989,6 +989,11 @@ end
         add_edge!(very_high_degree, 1, PeriodicVertex{0}(i))
     end
     @test_throws ErrorException rings(very_high_degree, 1)
+
+    xak = PeriodicGraph("3 1 2 0 0 0 1 2 0 1 1 1 2 1 0 1 1 2 1 1 1 1 3 0 0 0 1 3 0 1 0 1 3 1 0 0 1 3 1 1 1 2 3 0 -1 -1 2 3 0 0 -1 2 3 0 0 0 2 3 0 1 0")
+    utn = PeriodicGraph("3 1 2 0 0 0 1 3 0 0 0 1 4 0 0 0 2 5 0 0 0 2 6 0 0 0 3 7 0 0 0 3 8 0 0 0 4 6 0 1 0 4 7 0 0 1 5 9 0 0 0 5 10 0 0 0 6 10 -1 2 0 7 11 0 0 0 8 11 0 1 0 8 12 0 0 0 9 13 0 0 0 9 14 0 0 0 10 14 0 1 0 11 15 0 0 0 12 13 0 3 0 12 15 1 0 0 13 16 0 0 0 14 16 0 1 1 15 16 -1 2 0")
+    @test sort!(length.(RingAttributions(xak, true, 12))) == [10, 10, 12]
+    @test length.(RingAttributions(utn, true, 12)) == fill(21, 16)
 end
 
 
