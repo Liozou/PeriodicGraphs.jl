@@ -405,7 +405,7 @@ julia> subgraph  # the subgraph consists in only the two relevant two vertices
 PeriodicGraph2D(2, PeriodicEdge2D[(1, 2, (0,0)), (1, 2, (1,0))])
 
 julia> mat  # the new cell is twice as large as the initial one
-2×2 SMatrix{2, 2, $Int, 4} with indices SOneTo(2)×SOneTo(2):
+2×2 $SMatrix{2, 2, $Int, 4} with indices SOneTo(2)×SOneTo(2):
  2  0
  0  1
 ```

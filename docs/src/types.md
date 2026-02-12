@@ -71,7 +71,7 @@ julia> dstv
 6
 
 julia> ofs
-3-element StaticArrays.SVector{3, Int64} with indices SOneTo(3):
+3-element StaticArraysCore.SVector{3, Int64} with indices SOneTo(3):
  1
  0
  2

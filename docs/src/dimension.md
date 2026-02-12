@@ -8,10 +8,11 @@ For example, consider an infinite set of identical 2-periodic graphs stacked acr
 third dimension: the resulting graph is of dimension 3, but its dimensionality is 2 (or
 below) because all the topological information is stored in the 2-periodic subgraph.
 
-The connected components of `g` can be separated and sorted by dimensionality using the
+The connected components of `g` can be separated with [`Graphs.connected_components`](@ref) and sorted by dimensionality using the
 [`dimensionality`](@ref) function:
 
 ```@docs
+Graphs.connected_components
 dimensionality
 ```
 
@@ -39,7 +40,7 @@ given `PeriodicGraph`:
 julia> function extract_1D_components(g::PeriodicGraph{D}) where D
            d = dimensionality(g)
            components1D = get(d, 1, Vector{Int}[])
-           return [PeriodicGraph1D(g[l]) for l in components1D]
+           return [PeriodicGraph1D(g[l[1]]) for l in components1D]
        end
 extract_1D_components (generic function with 1 method)
 ```

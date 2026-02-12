@@ -1,6 +1,6 @@
 # PeriodicGraphs
 
-[![Build Status](https://ci.appveyor.com/api/projects/status/github/Liozou/PeriodicGraphs.jl?svg=true)](https://ci.appveyor.com/project/Liozou/PeriodicGraphs-jl)
+[![Build Status](https://github.com/Liozou/PeriodicGraphs.jl/actions/workflows/CI.yml/badge.svg?branch=master)](https://github.com/Liozou/PeriodicGraphs.jl/actions/workflows/CI.yml?query=branch%3Amaster)
 [![codecov](https://codecov.io/gh/Liozou/PeriodicGraphs.jl/branch/master/graph/badge.svg)](https://codecov.io/gh/Liozou/PeriodicGraphs.jl)
 [![Documentation](https://img.shields.io/badge/docs-latest-blue.svg)](https://liozou.github.io/PeriodicGraphs.jl/)
 [![Aqua QA](https://raw.githubusercontent.com/JuliaTesting/Aqua.jl/master/badge.svg)](https://github.com/JuliaTesting/Aqua.jl)
