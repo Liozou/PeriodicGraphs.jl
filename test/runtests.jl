@@ -717,7 +717,7 @@ end
     @test check_dimensionality(PeriodicGraph("3  1 1 0 0 1  1 2 -1 0 0  1 2 0 -1 0  1 2 1 0 0"), Dict(3 => [([1,2],2)]))
 
     u2A = PeriodicGraph("2 1 2 0 0 1 4 -1 0 1 4 0 -1 2 3 -1 -1 2 3 0 0 3 4 0 0")
-    splits = split_catenation(u2A)
+    splits = split_connected_components(u2A)
     @test length(splits) == 1
     subgraph, vmaps, mat, dim = splits[1]
     @test isone(mat)
@@ -730,14 +730,14 @@ end
     @test subgraph == offset_representatives!(u2A[vertex_permutation], vertex_offsets)
 
     u2B = PeriodicGraph("2 1 4 -1 0 1 4 0 0 1 5 0 -1 2 3 -1 0 2 3 0 0 2 6 0 -1 3 5 -1 1 3 5 0 1 4 6 -1 1 4 6 0 1")
-    splits = split_catenation(u2B)
+    splits = split_connected_components(u2B)
     @test length(splits) == 1
     subgraph, vmaps, mat, dim = splits[1]
     @test length(vmaps) == 4
     @test allunique(vmaps)
 
     u2C = PeriodicGraph("2 1 3 -1 0 1 4 -1 1 1 4 0 -1 2 3 -1 1 2 3 0 -1 2 4 -1 0")
-    splits = split_catenation(u2C)
+    splits = split_connected_components(u2C)
     @test length(splits) == 1
     subgraph, vmaps, mat, dim = splits[1]
     @test dim == 2

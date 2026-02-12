@@ -230,7 +230,7 @@ Return the connected components of a periodic graph `g` as lists of vertex indic
     `PeriodicVertex(1, (0,))` and `PeriodicVertex(1, (1,))` do not belong to the same
     connected component either.
 
-See also [`dimensionality`](@ref) and [`split_catenation`](@ref).
+See also [`dimensionality`](@ref) and [`split_connected_components`](@ref).
 """
 function Graphs.connected_components(g::PeriodicGraph)
     nvg = nv(g)

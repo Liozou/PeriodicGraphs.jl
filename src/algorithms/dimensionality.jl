@@ -2,7 +2,7 @@ import Base.GMP.MPZ
 import LinearAlgebra: det
 using StaticArrays
 
-export dimensionality, split_catenation
+export dimensionality, split_connected_components
 
 # Algorithm 3 from George Havas, Bohdan S. Majewski, and Keith R. Matthews,
 # "Extended GCD and Hermite Normal Form Algorithms via Lattice Basis Reduction"
@@ -241,7 +241,7 @@ Return a dictionary where each entry `n => [(l1,m1), (l2,m2), ...]` means that
 component is present `mi` times per unit cell.
 
 In other words, the connected component `li` has a periodicity that can only be expressed
-in a unit cell `mi` times larger than the current one. See also [`split_catenation`](@ref).
+in a unit cell `mi` times larger than the current one. See also [`split_connected_components`](@ref).
 
 ## Examples
 ```jldoctest
@@ -365,7 +365,7 @@ function _explore_one_component!(expected, encountered, visited, graph::Periodic
 end
 
 """
-    split_catenation(graph::PeriodicGraph{N}) where N
+    split_connected_components(graph::PeriodicGraph{N}) where N
 
 Return a list of tuples `(subgraph, vmaps, mat, dim)` where `subgraph` is a
 connected component of the input `graph`.
@@ -387,7 +387,7 @@ Dict{$Int, Vector{Tuple{Vector{$Int}, $Int}}} with 2 entries:
   2 => [([1], 3)]
   1 => [([2, 3], 2)]
 
-julia> splits = split_catenation(g);
+julia> splits = split_connected_components(g);
 
 julia> last.(splits) # One 2-dimensional catenation (vertex 1), one 1-dimensional (vertices 2 and 3)
 2-element Vector{$Int}:
@@ -410,7 +410,7 @@ julia> mat  # the new cell is twice as large as the initial one
  0  1
 ```
 """
-function split_catenation(graph::PeriodicGraph{N}) where N
+function split_connected_components(graph::PeriodicGraph{N}) where N
     n = nv(graph)
     visited = falses(n)
     expected = zeros(Int, n)
