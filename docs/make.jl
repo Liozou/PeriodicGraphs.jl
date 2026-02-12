@@ -22,6 +22,7 @@ makedocs(
         ],
         "Utilities"  => "utilities.md"
     ],
+    checkdocs=:public,
 )
 
 # Documenter can also automatically deploy documentation to gh-pages.
