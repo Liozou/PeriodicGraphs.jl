@@ -746,6 +746,20 @@ end
     @test length(vmaps) == 2
     @test vmaps[1] == PeriodicVertex2D[(1, (0,0)), (3, (-1,0)), (4, (-1,1)), (2, (-1,1))]
     @test vmaps[2] == PeriodicVertex2D[(1, (1,-1)), (3, (0,-1)), (4, (0,0)), (2, (0,0))]
+
+    u2D = PeriodicGraph("2   1 1  0 2   2 2  0 1   2 2  1 0")
+    splits = split_connected_components(u2D)
+    @test length(splits) == 2
+    subgraph, vmaps, mat, dim = splits[1]
+    @test dim == 1
+    @test mat == SA[1 0; 0 2]
+    @test subgraph == PeriodicGraph("2 1 1 0 1")
+    @test vmaps == [PeriodicVertex2D[(1, (0,0))], PeriodicVertex2D[(1, (0,-1))]]
+    subgraph, vmaps, mat, dim = splits[2]
+    @test dim == 2
+    @test mat == SA[1 0; 0 1]
+    @test subgraph == PeriodicGraph("2 1 1 0 1 1 1 1 0")
+    @test vmaps == [PeriodicVertex2D[(2, (0,0))]]
 end
 
 @testset "Dimension change" begin

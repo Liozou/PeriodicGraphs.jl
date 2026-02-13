@@ -352,6 +352,14 @@ function _explore_one_component!(expected, encountered, visited, graph::Periodic
     end
     vec::Vector{SVector{N,Int}} = collect(recordedperiodicities)
     catenationmat, d = normal_basis(vec)
+    detmat = Int(det(catenationmat))
+    if detmat < 0 && N ≥ 2
+        # Swap the two first columns to make the determinant positive.
+        # This is not crucial to the algorithm, but it yields simpler offsets in the end.
+        for i in 1:N
+            catenationmat[i,1], catenationmat[i,2] = catenationmat[i,2], catenationmat[i,1]
+        end
+    end
     invmcatenationmat = inv(SMatrix{N,N,Rational{Int},N*N}(catenationmat))
     for (j, (src, (dst, ofs))) in enumerate(newedges)
         newedges[j] = PeriodicEdge{N}(src, dst, Int.(invmcatenationmat*ofs))
@@ -359,7 +367,7 @@ function _explore_one_component!(expected, encountered, visited, graph::Periodic
 
     idx = minimum(keys(component))
     @assert expected[idx] == 0
-    expected[idx] = Int(det(catenationmat))
+    expected[idx] = abs(detmat)
     encountered[idx] = (PeriodicGraph{N}(length(Q), newedges), [OffsetVertexIterator(nullofs, Q)], catenationmat, d)
     idx
 end
@@ -431,8 +439,17 @@ function split_connected_components(graph::PeriodicGraph{N}) where N
             refmap = first(vmaps).nlist
             invmat = inv(SMatrix{N,N,Rational{Int},N*N}(mat))
             dumb_indices = findall(i -> begin onei = zeros(Int, N); onei[i] = 1; mat * onei == onei end, 1:N)
-            for h in 1:1000
-                x = reverse_hash_position(h, Val{N}())
+            h = 0
+            MAXh = 1000
+            oneaxes = ntuple(i -> SVector{N,Int}(ntuple(j -> Int(j == i), Val(N))), Val(N))
+            while true
+                h += 1
+                x = if h ≤ MAXh
+                    reverse_hash_position(h, Val{N}())
+                else
+                    u, v = fldmod1(h - MAXh, N)
+                    NtoZ(u)*oneaxes[v]
+                end
                 all(i -> iszero(x[i]), dumb_indices) || continue
                 attempt_x = true
                 for ofsvmap in vmaps
@@ -459,7 +476,7 @@ function split_connected_components(graph::PeriodicGraph{N}) where N
                 length(vmaps) == ex && break
             end
         end
-        length(vmaps) < ex && error("Could not complete the splitting of connected components")
+        @assert length(vmaps) == ex
     end
     encountered[keep]
 end
